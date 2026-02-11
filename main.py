@@ -2,6 +2,7 @@ import flet as ft
 from supabase import create_client, Client
 from fpdf import FPDF
 import datetime
+from datetime import timedelta
 import os
 import re
 import urllib.parse 
@@ -17,8 +18,8 @@ except Exception as e:
     print(f"Erro no Banco: {e}")
 
 def main(page: ft.Page):
-    print("Iniciando App V25...")
-    page.title = "Oficina V25 (Relatório Completo)"
+    print("Iniciando App V32 Smart Dates...")
+    page.title = "Oficina App"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.scroll = "adaptive"
     page.window_width = 390
@@ -27,8 +28,6 @@ def main(page: ft.Page):
     # Variáveis de Estado
     usuario_atual = {"id": None, "nome": None, "setor": None}
     dados_atuais = []
-    
-    # Controle de Edição (Se estiver preenchido, estamos editando)
     id_em_edicao = {"id": None} 
 
     # --- FUNÇÕES AUXILIARES ---
@@ -36,50 +35,50 @@ def main(page: ft.Page):
         s = texto.replace(" ", "_")
         return re.sub(r'[^a-zA-Z0-9_\-]', '', s)
 
-    # --- GERADOR DE PDF (ATUALIZADO COM CLIENTE) ---
+    # --- GERADOR DE PDF ---
     def gerar_pdf_nuvem(lista_dados, periodo, nome_usuario):
         try:
             pdf = FPDF()
             pdf.add_page()
             
-            # Títulos
+            # Cabeçalhos
             pdf.set_font("helvetica", "B", 16)
             pdf.cell(0, 10, "RELATORIO DE SERVICOS", align="C", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("helvetica", "", 10)
             pdf.cell(0, 10, f"Periodo: {periodo}", align="C", new_x="LMARGIN", new_y="NEXT")
-            pdf.cell(0, 10, f"Tecnico: {nome_usuario}", align="C", new_x="LMARGIN", new_y="NEXT")
+            
+            titulo_tecnico = f"Tecnico: {nome_usuario}"
+            if nome_usuario == "TODOS": titulo_tecnico = "Relatorio Geral (Todos os Tecnicos)"
+            
+            pdf.cell(0, 10, titulo_tecnico, align="C", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(5)
 
-            # Cabeçalho da Tabela
+            # Tabela
             pdf.set_fill_color(220, 220, 220)
-            pdf.set_font("helvetica", "B", 8) # Fonte um pouco menor para caber tudo
+            pdf.set_font("helvetica", "B", 8) 
             
-            # Larguras: Data(20), Placa(20), Modelo(30), Cliente(35), Obs(Resto)
             pdf.cell(20, 8, "DATA", border=1, fill=True, align="C")
             pdf.cell(20, 8, "PLACA", border=1, fill=True, align="C")
             pdf.cell(30, 8, "MODELO", border=1, fill=True, align="C")
-            pdf.cell(35, 8, "CLIENTE", border=1, fill=True, align="C") # NOVA COLUNA
+            pdf.cell(35, 8, "CLIENTE", border=1, fill=True, align="C")
             pdf.cell(0, 8, "OBSERVACOES", border=1, fill=True, align="C", new_x="LMARGIN", new_y="NEXT")
 
-            # Linhas da Tabela
-            pdf.set_font("helvetica", "", 7) # Fonte 7 para caber textos longos
+            # Linhas
+            pdf.set_font("helvetica", "", 7)
             for item in lista_dados:
                 data_fmt = f"{item['data_hora'][8:10]}/{item['data_hora'][5:7]}"
-                
-                # Corta textos para não quebrar layout
                 modelo = item['modelo'][:15]
-                cliente = item['cliente'][:20] # Corta nome muito longo
+                cliente = item['cliente'][:20]
                 obs_texto = (item['observacoes'][:55] + '..') if len(item['observacoes']) > 55 else item['observacoes']
 
                 pdf.cell(20, 8, data_fmt, border=1, align="C")
                 pdf.cell(20, 8, item['placa'], border=1, align="C")
                 pdf.cell(30, 8, modelo, border=1, align="C")
-                pdf.cell(35, 8, cliente, border=1, align="C") # NOVA COLUNA
+                pdf.cell(35, 8, cliente, border=1, align="C") 
                 pdf.cell(0, 8, obs_texto, border=1, new_x="LMARGIN", new_y="NEXT")
 
             data_hoje = datetime.datetime.now().strftime("%Y-%m-%d")
-            nome_user_limpo = limpar_nome_arquivo(nome_usuario)
-            nome_arq = f"Relatorio_{nome_user_limpo}_{data_hoje}.pdf"
+            nome_arq = f"Relatorio_{limpar_nome_arquivo(nome_usuario)}_{data_hoje}.pdf"
             
             pdf.output(nome_arq)
 
@@ -319,11 +318,53 @@ def main(page: ft.Page):
             btn_cancelar_edicao
         ])
 
-        # ABA 2: HISTORICO
-        txt_dt_ini = ft.TextField(label="Início", value="2026-02-01", width=140)
-        txt_dt_fim = ft.TextField(label="Fim", value="2026-02-28", width=140)
-        lista_cards = ft.Column()
+        # ABA 2: HISTORICO (COM BOTÕES DE DATA INTELIGENTES)
         
+        hoje_padrao = datetime.date.today()
+        txt_dt_ini = ft.TextField(label="Início", value=str(hoje_padrao), width=140)
+        txt_dt_fim = ft.TextField(label="Fim", value=str(hoje_padrao), width=140)
+
+        # Lógica dos Botões de Atalho
+        def set_data_hoje(e):
+            h = datetime.date.today()
+            txt_dt_ini.value = str(h)
+            txt_dt_fim.value = str(h)
+            page.update()
+
+        def set_data_mes(e):
+            h = datetime.date.today()
+            primeiro_dia = h.replace(day=1)
+            txt_dt_ini.value = str(primeiro_dia)
+            txt_dt_fim.value = str(h)
+            page.update()
+
+        def set_data_mes_passado(e):
+            h = datetime.date.today()
+            primeiro_dia_este_mes = h.replace(day=1)
+            ultimo_dia_mes_passado = primeiro_dia_este_mes - timedelta(days=1)
+            primeiro_dia_mes_passado = ultimo_dia_mes_passado.replace(day=1)
+            
+            txt_dt_ini.value = str(primeiro_dia_mes_passado)
+            txt_dt_fim.value = str(ultimo_dia_mes_passado)
+            page.update()
+
+        botoes_atalho = ft.Row([
+            ft.OutlinedButton("HOJE", on_click=set_data_hoje),
+            ft.OutlinedButton("ESTE MÊS", on_click=set_data_mes),
+            ft.OutlinedButton("MÊS PASSADO", on_click=set_data_mes_passado),
+        ], alignment="center", wrap=True)
+
+        # Dropdown Admin
+        dd_filtro_func = ft.Dropdown(
+            label="Filtrar por Técnico",
+            options=[],
+            width=300,
+            visible=False
+        )
+        
+        txt_debug_erro = ft.Text("", color="red", size=12)
+
+        lista_cards = ft.Column()
         btn_gerar = ft.ElevatedButton("GERAR LINK PDF", icon=None)
         btn_buscar = ft.FilledButton("FILTRAR / BUSCAR", width=300, height=45)
 
@@ -332,8 +373,21 @@ def main(page: ft.Page):
             btn_gerar.text = "PROCESSANDO..."
             btn_gerar.disabled = True
             page.update()
+            
             periodo = f"{txt_dt_ini.value} a {txt_dt_fim.value}"
-            url_pdf = gerar_pdf_nuvem(dados_atuais, periodo, usuario_atual['nome'])
+            
+            nome_para_pdf = usuario_atual['nome']
+            if dd_filtro_func.visible: 
+                if dd_filtro_func.value == "todos":
+                    nome_para_pdf = "TODOS"
+                else:
+                    for opt in dd_filtro_func.options:
+                        if opt.key == dd_filtro_func.value:
+                            nome_para_pdf = opt.text
+                            break
+
+            url_pdf = gerar_pdf_nuvem(dados_atuais, periodo, nome_para_pdf)
+            
             if url_pdf:
                 msg = f"Olá, segue o relatório ({periodo}): {url_pdf}"
                 msg_encoded = urllib.parse.quote(msg)
@@ -352,7 +406,6 @@ def main(page: ft.Page):
         btn_gerar.on_click = acao_gerar
         btn_gerar.visible = False
 
-        # --- FUNÇÕES ESPECIAIS (SEM POP-UP) ---
         def deletar_item(item_id):
             try:
                 supabase.table("servicos").delete().eq("id", item_id).execute()
@@ -370,7 +423,6 @@ def main(page: ft.Page):
             lbl_titulo_os.color = "orange"
             btn_salvar_os.text = "SALVAR ALTERAÇÕES"
             btn_cancelar_edicao.visible = True
-            
             trocar_tela("NOVA OS")
 
         def buscar(e):
@@ -385,7 +437,11 @@ def main(page: ft.Page):
                 ini = f"{txt_dt_ini.value}T00:00:00"
                 fim = f"{txt_dt_fim.value}T23:59:59"
                 q = supabase.table("servicos").select("*").gte("data_hora", ini).lte("data_hora", fim).order("id", desc=True)
-                if usuario_atual['setor'].lower() != 'admin': q = q.eq("usuario_id", usuario_atual['id'])
+                
+                if dd_filtro_func.visible and dd_filtro_func.value != "todos" and dd_filtro_func.value is not None:
+                     q = q.eq("usuario_id", dd_filtro_func.value)
+                elif not dd_filtro_func.visible:
+                     q = q.eq("usuario_id", usuario_atual['id'])
                 
                 dados = q.execute().data
                 lista_cards.controls.clear()
@@ -434,7 +490,14 @@ def main(page: ft.Page):
 
         conteudo_historico = ft.Column([
             ft.Text("HISTÓRICO", size=18, weight="bold"),
+            
+            # ATALHOS DE DATA AQUI
+            botoes_atalho,
+            
             ft.Row([txt_dt_ini, txt_dt_fim]),
+            
+            txt_debug_erro, 
+            dd_filtro_func, 
             btn_buscar,
             ft.Divider(),
             btn_gerar,
@@ -445,14 +508,40 @@ def main(page: ft.Page):
         area_conteudo = ft.Container(content=conteudo_nova_os)
 
         def trocar_tela(nome_tela):
-            if nome_tela == "NOVA OS": area_conteudo.content = conteudo_nova_os
-            elif nome_tela == "HISTORICO": area_conteudo.content = conteudo_historico
+            if nome_tela == "NOVA OS": 
+                area_conteudo.content = conteudo_nova_os
+            elif nome_tela == "HISTORICO": 
+                area_conteudo.content = conteudo_historico
+                
+                # --- LÓGICA DE CARREGAR USUÁRIOS ---
+                setor_user = usuario_atual['setor'].lower()
+                eh_admin = any(cargo in setor_user for cargo in ['admin', 'dono', 'gerente', 'chefe'])
+                
+                if eh_admin:
+                    dd_filtro_func.visible = True
+                    if not dd_filtro_func.options:
+                        try:
+                            dd_filtro_func.options.append(ft.dropdown.Option(text="TODOS", key="todos"))
+                            todos_users = supabase.table("usuarios").select("id, nome").execute().data
+                            for u in todos_users:
+                                dd_filtro_func.options.append(ft.dropdown.Option(text=u['nome'], key=str(u['id'])))
+                            dd_filtro_func.value = "todos"
+                            page.update()
+                        except Exception as ex:
+                            txt_debug_erro.value = f"Erro ao buscar técnicos: {ex}"
+                else:
+                    dd_filtro_func.visible = False
+                
             page.update()
 
+        # TOPO MOSTRANDO O SETOR
         topo = ft.Container(
             bgcolor="blue", padding=10,
             content=ft.Row([
-                ft.Text(f"Olá, {usuario_atual['nome']}", color="white", weight="bold"),
+                ft.Column([
+                    ft.Text(f"Olá, {usuario_atual['nome']}", color="white", weight="bold"),
+                    ft.Text(f"Setor: {usuario_atual['setor']}", color="white", size=10) 
+                ]),
                 ft.FilledButton("SAIR", on_click=lambda e: tela_login(), style=ft.ButtonStyle(bgcolor="red"))
             ], alignment="spaceBetween")
         )
@@ -469,4 +558,4 @@ def main(page: ft.Page):
 
     tela_login()
 
-ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8550, host="0.0.0.0")
+ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=int(os.environ.get("PORT", 8550)), host="0.0.0.0")
