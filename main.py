@@ -32,7 +32,7 @@ def main(page: ft.Page):
         s = texto.replace(" ", "_")
         return re.sub(r'[^a-zA-Z0-9_\-]', '', s)
 
-    # --- GERADOR DE PDF (CORRIGIDO) ---
+    # --- GERADOR DE PDF ---
     def gerar_pdf_nuvem(lista_dados, periodo, nome_usuario):
         try:
             pdf = FPDF()
@@ -67,8 +67,10 @@ def main(page: ft.Page):
                 pdf.cell(35, 8, cliente, border=1, align="C") 
                 pdf.cell(0, 8, obs_texto, border=1, new_x="LMARGIN", new_y="NEXT")
 
+            # NOME DO ARQUIVO IGUAL AO ORIGINAL
             data_hoje = datetime.datetime.now().strftime("%Y-%m-%d")
             nome_arq = f"Relatorio_{limpar_nome_arquivo(nome_usuario)}_{data_hoje}.pdf"
+            
             pdf.output(nome_arq)
 
             with open(nome_arq, "rb") as f:
@@ -84,37 +86,40 @@ def main(page: ft.Page):
     # --- TELAS ---
     def tela_cadastro():
         page.clean()
-        txt_novo_nome = ft.TextField(label="Nome Completo (Login)")
-        txt_novo_setor = ft.TextField(label="Setor (Ex: Pintura)")
-        txt_novo_pin = ft.TextField(label="Senha PIN", keyboard_type="number", password=True)
+        txt_novo_nome = ft.TextField(label="Seu Nome Completo (Login)")
+        txt_novo_setor = ft.TextField(label="Seu Setor (Ex: Pintura)")
+        txt_novo_pin = ft.TextField(label="Crie uma Senha PIN (Números)", keyboard_type="number", password=True)
         txt_msg_erro = ft.Text("", color="red") 
         btn_salvar_cad = ft.FilledButton("SALVAR CADASTRO", width=300, height=50)
 
         def salvar_usuario(e):
-            if not txt_novo_nome.value or not txt_novo_pin.value: return
+            if not txt_novo_nome.value or not txt_novo_pin.value or not txt_novo_setor.value:
+                txt_msg_erro.value = "Erro: Preencha todos os campos!"; page.update(); return
             try:
                 supabase.table("usuarios").insert({"nome": txt_novo_nome.value, "pin": txt_novo_pin.value, "setor": txt_novo_setor.value, "ativo": True}).execute()
                 tela_login()
             except: txt_msg_erro.value = "Erro ao cadastrar"; page.update()
 
         btn_salvar_cad.on_click = salvar_usuario
-        page.add(ft.Column([ft.Text("CRIAR CONTA", size=25, weight="bold"), txt_novo_nome, txt_novo_setor, txt_novo_pin, txt_msg_erro, btn_salvar_cad, ft.TextButton("Voltar", on_click=lambda e: tela_login())], horizontal_alignment="center"))
+        page.add(ft.Column([ft.Text("CRIAR CONTA", size=25, weight="bold", color="blue"), ft.Text("Preencha seus dados", size=14, color="grey"), ft.Divider(color="transparent"), txt_novo_nome, txt_novo_setor, txt_novo_pin, txt_msg_erro, ft.Divider(color="transparent"), btn_salvar_cad, ft.TextButton("Voltar para Login", on_click=lambda e: tela_login())], horizontal_alignment="center", alignment="center"))
 
     def tela_login():
         page.clean()
-        txt_login_nome = ft.TextField(label="Nome de Usuário", width=300)
-        txt_login_pin = ft.TextField(label="PIN", password=True, width=150, text_align="center", keyboard_type="number")
-        txt_aviso_login = ft.Text("", color="red", weight="bold")
-        btn_entrar = ft.FilledButton("ENTRAR", width=200, on_click=lambda e: logar())
+        txt_login_nome = ft.TextField(label="Digite seu Nome de Usuário", width=300)
+        txt_login_pin = ft.TextField(label="Senha PIN", password=True, width=150, text_align="center", keyboard_type="number")
+        txt_aviso_login = ft.Text("", color="red", size=16, weight="bold")
+        btn_entrar = ft.FilledButton("ENTRAR", width=200, height=50)
 
-        def logar():
+        def logar(e):
+            txt_aviso_login.value = "Verificando..."; page.update()
             res = supabase.table("usuarios").select("*").ilike("nome", txt_login_nome.value).execute()
             if res.data and res.data[0]['pin'] == txt_login_pin.value:
                 usuario_atual.update(res.data[0]); sistema_principal()
             else:
-                txt_aviso_login.value = "Dados Incorretos"; page.update()
+                txt_aviso_login.value = "Senha Incorreta!"; page.update()
 
-        page.add(ft.Column([ft.Text("OFICINA APP", size=30, weight="bold"), txt_login_nome, txt_login_pin, txt_aviso_login, btn_entrar, ft.OutlinedButton("CRIAR CONTA", on_click=lambda e: tela_cadastro())], horizontal_alignment="center", alignment="center"))
+        btn_entrar.on_click = logar
+        page.add(ft.Column([ft.Text("OFICINA APP", size=30, weight="bold", color="blue"), ft.Text("Login Seguro", size=12, color="grey"), ft.Divider(height=20, color="transparent"), txt_login_nome, txt_login_pin, txt_aviso_login, btn_entrar, ft.Divider(), ft.Text("Não tem acesso?"), ft.OutlinedButton("CRIAR CONTA NOVA", on_click=lambda e: tela_cadastro(), width=200)], horizontal_alignment="center", alignment="center"))
 
     def sistema_principal():
         page.clean()
@@ -124,7 +129,7 @@ def main(page: ft.Page):
         txt_placa = ft.TextField(label="Placa")
         txt_modelo = ft.TextField(label="Modelo")
         txt_cliente = ft.TextField(label="Cliente")
-        txt_obs = ft.TextField(label="Observações", multiline=True, min_lines=3, max_lines=5)
+        txt_obs = ft.TextField(label="O que foi feito? (Observações)", multiline=True, min_lines=3, max_lines=5)
         btn_salvar_os = ft.FilledButton("SALVAR REGISTRO", width=300, height=50)
         btn_cancelar_edicao = ft.TextButton("Cancelar Edição", visible=False)
 
@@ -140,11 +145,11 @@ def main(page: ft.Page):
                 supabase.table("servicos").update(dados).eq("id", id_em_edicao['id']).execute()
             else:
                 supabase.table("servicos").insert(dados).execute()
-            resetar_form(); page.snack_bar = ft.SnackBar(ft.Text("Sucesso!")); page.snack_bar.open = True; page.update()
+            resetar_form(); page.snack_bar = ft.SnackBar(ft.Text("Registro Salvo!")); page.snack_bar.open = True; page.update()
 
         btn_salvar_os.on_click = salvar_os
         btn_cancelar_edicao.on_click = lambda e: resetar_form()
-        conteudo_nova_os = ft.Column([lbl_titulo_os, txt_placa, txt_modelo, txt_cliente, txt_obs, btn_salvar_os, btn_cancelar_edicao])
+        conteudo_nova_os = ft.Column([lbl_titulo_os, txt_placa, txt_modelo, txt_cliente, ft.Divider(), txt_obs, btn_salvar_os, btn_cancelar_edicao])
 
         # ABA 2: HISTORICO
         hoje = datetime.date.today()
@@ -153,20 +158,6 @@ def main(page: ft.Page):
         dd_filtro_func = ft.Dropdown(label="Filtrar por Técnico", width=300, visible=False)
         lista_cards = ft.Column()
         btn_gerar = ft.FilledButton("GERAR LINK PDF", visible=False, width=300)
-
-        def set_hoje(e):
-            h = datetime.date.today()
-            txt_dt_ini.value = str(h); txt_dt_fim.value = str(h); page.update()
-
-        def set_mes(e):
-            h = datetime.date.today()
-            txt_dt_ini.value = str(h.replace(day=1)); txt_dt_fim.value = str(h); page.update()
-
-        def set_mes_passado(e):
-            h = datetime.date.today()
-            u_dia_m_passado = h.replace(day=1) - timedelta(days=1)
-            p_dia_m_passado = u_dia_m_passado.replace(day=1)
-            txt_dt_ini.value = str(p_dia_m_passado); txt_dt_fim.value = str(u_dia_m_passado); page.update()
 
         def buscar(e):
             lista_cards.controls.clear(); dados_atuais.clear(); btn_gerar.visible = False; page.update()
@@ -184,6 +175,7 @@ def main(page: ft.Page):
                             ft.Row([ft.Text(f"PLACA: {item['placa']}", weight="bold"), ft.Text(f"{item['data_hora'][8:10]}/{item['data_hora'][5:7]}", color="grey")], alignment="spaceBetween"),
                             ft.Text(f"Veículo: {item['modelo']}"), ft.Text(f"Cliente: {item['cliente']}", size=12),
                             ft.Text(f"Feito: {item['observacoes']}", color="blue"),
+                            ft.Divider(),
                             ft.Row([ft.TextButton("[EDITAR]", on_click=lambda e, i=item: preparar_editar(i)), 
                                     ft.TextButton("[EXCLUIR]", on_click=lambda e, idx=item['id']: (supabase.table("servicos").delete().eq("id", idx).execute(), buscar(None)), style=ft.ButtonStyle(color="red"))], alignment="end")
                         ])
@@ -200,15 +192,24 @@ def main(page: ft.Page):
             
             url = gerar_pdf_nuvem(dados_atuais, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
             if url:
-                btn_gerar.url = f"https://wa.me/?text={urllib.parse.quote(f'Relatório: {url}')}"
+                btn_gerar.url = f"https://wa.me/?text={urllib.parse.quote(f'Olá, segue o relatório: {url}')}"
                 btn_gerar.text = "WHATSAPP PRONTO - CLIQUE AQUI"; btn_gerar.bgcolor = "green"
             btn_gerar.disabled = False; page.update()
 
         btn_gerar.on_click = acao_gerar
 
+        def set_data(tipo):
+            h = datetime.date.today()
+            if tipo == 'hoje': txt_dt_ini.value = str(h); txt_dt_fim.value = str(h)
+            if tipo == 'mes': txt_dt_ini.value = str(h.replace(day=1)); txt_dt_fim.value = str(h)
+            if tipo == 'passado':
+                u_dia = h.replace(day=1) - timedelta(days=1)
+                txt_dt_ini.value = str(u_dia.replace(day=1)); txt_dt_fim.value = str(u_dia)
+            page.update()
+
         conteudo_historico = ft.Column([
             ft.Text("FILTRAR PERÍODO", size=14, weight="bold"),
-            ft.Row([ft.OutlinedButton("HOJE", on_click=set_hoje), ft.OutlinedButton("ESTE MÊS", on_click=set_mes), ft.OutlinedButton("MÊS PASSADO", on_click=set_mes_passado)], alignment="center"),
+            ft.Row([ft.OutlinedButton("HOJE", on_click=lambda e: set_data('hoje')), ft.OutlinedButton("ESTE MÊS", on_click=lambda e: set_data('mes')), ft.OutlinedButton("MÊS PASSADO", on_click=lambda e: set_data('passado'))], alignment="center"),
             ft.Row([txt_dt_ini, txt_dt_fim]),
             dd_filtro_func, ft.FilledButton("BUSCAR REGISTROS", on_click=buscar, width=300),
             ft.Divider(), btn_gerar, lista_cards
@@ -220,7 +221,7 @@ def main(page: ft.Page):
             if nome == "HISTORICO":
                 area_conteudo.content = conteudo_historico
                 setor = usuario_atual['setor'].lower()
-                if any(c in setor for c in ['admin', 'dono', 'gerente']):
+                if any(c in setor for c in ['admin', 'dono', 'gerente', 'chefe']):
                     dd_filtro_func.visible = True
                     if not dd_filtro_func.options:
                         dd_filtro_func.options.append(ft.dropdown.Option(text="TODOS", key="todos"))
@@ -230,8 +231,9 @@ def main(page: ft.Page):
             else: area_conteudo.content = conteudo_nova_os
             page.update()
 
-        page.add(ft.Container(bgcolor="blue", padding=10, content=ft.Row([ft.Text(f"Olá, {usuario_atual['nome']}", color="white", weight="bold"), ft.TextButton("SAIR", on_click=lambda e: tela_login(), style=ft.ButtonStyle(color="white"))], alignment="spaceBetween")))
-        page.add(ft.Row([ft.FilledButton("NOVA OS", expand=True, on_click=lambda e: trocar_tela("NOVA")), ft.FilledButton("HISTÓRICO", expand=True, on_click=lambda e: trocar_tela("HISTORICO"))]))
+        # BARRA SUPERIOR ORIGINAL
+        page.add(ft.Container(bgcolor="blue", padding=10, content=ft.Row([ft.Column([ft.Text(f"Olá, {usuario_atual['nome']}", color="white", weight="bold"), ft.Text(f"Setor: {usuario_atual['setor']}", color="white", size=10)]), ft.FilledButton("SAIR", on_click=lambda e: tela_login(), style=ft.ButtonStyle(bgcolor="red"))], alignment="spaceBetween")))
+        page.add(ft.Row([ft.FilledButton("NOVA OS", expand=True, on_click=lambda e: trocar_tela("NOVA")), ft.FilledButton("HISTORICO", expand=True, on_click=lambda e: trocar_tela("HISTORICO"))]))
         page.add(area_conteudo)
 
     tela_login()
