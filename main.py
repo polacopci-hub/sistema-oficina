@@ -58,19 +58,17 @@ def main(page: ft.Page):
             pdf.set_font("helvetica", "", 7)
             for item in lista_dados:
                 data_fmt = f"{item['data_hora'][8:10]}/{item['data_hora'][5:7]}"
-                modelo = item['modelo'][:15]
-                cliente = item['cliente'][:20]
-                obs_texto = (item['observacoes'][:55] + '..') if len(item['observacoes']) > 55 else item['observacoes']
+                modelo = str(item.get('modelo', '-'))[:15]
+                cliente = str(item.get('cliente', '-'))[:20]
+                obs_texto = (str(item.get('observacoes', '-'))[:55] + '..') if len(str(item.get('observacoes', '-'))) > 55 else str(item.get('observacoes', '-'))
                 pdf.cell(20, 8, data_fmt, border=1, align="C")
-                pdf.cell(20, 8, item['placa'], border=1, align="C")
+                pdf.cell(20, 8, str(item.get('placa', '-')), border=1, align="C")
                 pdf.cell(30, 8, modelo, border=1, align="C")
                 pdf.cell(35, 8, cliente, border=1, align="C") 
                 pdf.cell(0, 8, obs_texto, border=1, new_x="LMARGIN", new_y="NEXT")
 
-            # NOME DO ARQUIVO IGUAL AO ORIGINAL
             data_hoje = datetime.datetime.now().strftime("%Y-%m-%d")
             nome_arq = f"Relatorio_{limpar_nome_arquivo(nome_usuario)}_{data_hoje}.pdf"
-            
             pdf.output(nome_arq)
 
             with open(nome_arq, "rb") as f:
@@ -81,9 +79,10 @@ def main(page: ft.Page):
             os.remove(nome_arq) 
             return url
         except Exception as ex:
+            print(f"Erro PDF: {ex}")
             return None
 
-    # --- TELAS ---
+    # --- TELA DE CADASTRO (DESIGN ORIGINAL) ---
     def tela_cadastro():
         page.clean()
         txt_novo_nome = ft.TextField(label="Seu Nome Completo (Login)")
@@ -93,16 +92,26 @@ def main(page: ft.Page):
         btn_salvar_cad = ft.FilledButton("SALVAR CADASTRO", width=300, height=50)
 
         def salvar_usuario(e):
-            if not txt_novo_nome.value or not txt_novo_pin.value or not txt_novo_setor.value:
-                txt_msg_erro.value = "Erro: Preencha todos os campos!"; page.update(); return
+            if not txt_novo_nome.value or not txt_novo_pin.value:
+                txt_msg_erro.value = "Erro: Preencha os campos!"; page.update(); return
             try:
                 supabase.table("usuarios").insert({"nome": txt_novo_nome.value, "pin": txt_novo_pin.value, "setor": txt_novo_setor.value, "ativo": True}).execute()
                 tela_login()
             except: txt_msg_erro.value = "Erro ao cadastrar"; page.update()
 
         btn_salvar_cad.on_click = salvar_usuario
-        page.add(ft.Column([ft.Text("CRIAR CONTA", size=25, weight="bold", color="blue"), ft.Text("Preencha seus dados", size=14, color="grey"), ft.Divider(color="transparent"), txt_novo_nome, txt_novo_setor, txt_novo_pin, txt_msg_erro, ft.Divider(color="transparent"), btn_salvar_cad, ft.TextButton("Voltar para Login", on_click=lambda e: tela_login())], horizontal_alignment="center", alignment="center"))
+        page.add(ft.Column([
+            ft.Text("CRIAR CONTA", size=25, weight="bold", color="blue"),
+            ft.Text("Preencha seus dados", size=14, color="grey"),
+            ft.Divider(color="transparent"),
+            txt_novo_nome, txt_novo_setor, txt_novo_pin,
+            txt_msg_erro, 
+            ft.Divider(color="transparent"),
+            btn_salvar_cad,
+            ft.TextButton("Voltar para Login", on_click=lambda e: tela_login())
+        ], alignment="center", horizontal_alignment="center"))
 
+    # --- TELA DE LOGIN (DESIGN ORIGINAL RESTAURADO) ---
     def tela_login():
         page.clean()
         txt_login_nome = ft.TextField(label="Digite seu Nome de Usuário", width=300)
@@ -114,13 +123,26 @@ def main(page: ft.Page):
             txt_aviso_login.value = "Verificando..."; page.update()
             res = supabase.table("usuarios").select("*").ilike("nome", txt_login_nome.value).execute()
             if res.data and res.data[0]['pin'] == txt_login_pin.value:
-                usuario_atual.update(res.data[0]); sistema_principal()
+                usuario_atual.update(res.data[0])
+                sistema_principal()
             else:
                 txt_aviso_login.value = "Senha Incorreta!"; page.update()
 
         btn_entrar.on_click = logar
-        page.add(ft.Column([ft.Text("OFICINA APP", size=30, weight="bold", color="blue"), ft.Text("Login Seguro", size=12, color="grey"), ft.Divider(height=20, color="transparent"), txt_login_nome, txt_login_pin, txt_aviso_login, btn_entrar, ft.Divider(), ft.Text("Não tem acesso?"), ft.OutlinedButton("CRIAR CONTA NOVA", on_click=lambda e: tela_cadastro(), width=200)], horizontal_alignment="center", alignment="center"))
+        page.add(ft.Column([
+            ft.Text("OFICINA APP", size=30, weight="bold", color="blue"),
+            ft.Text("Login Seguro", size=12, color="grey"),
+            ft.Divider(height=20, color="transparent"),
+            txt_login_nome,
+            txt_login_pin,
+            txt_aviso_login,
+            btn_entrar,
+            ft.Divider(),
+            ft.Text("Não tem acesso?"),
+            ft.OutlinedButton("CRIAR CONTA NOVA", on_click=lambda e: tela_cadastro(), width=200)
+        ], alignment="center", horizontal_alignment="center"))
 
+    # --- SISTEMA PRINCIPAL (CARDS E ABA HISTORICO ORIGINAIS) ---
     def sistema_principal():
         page.clean()
         
@@ -140,7 +162,7 @@ def main(page: ft.Page):
 
         def salvar_os(e):
             if not txt_obs.value or not txt_placa.value: return
-            dados = {"usuario_id": usuario_atual['id'], "placa": txt_placa.value, "modelo": txt_modelo.value, "cliente": txt_cliente.value, "observacoes": txt_obs.value, "lista_servicos": "-"}
+            dados = {"usuario_id": usuario_atual['id'], "placa": txt_placa.value, "modelo": txt_modelo.value, "cliente": txt_cliente.value, "observacoes": txt_obs.value}
             if id_em_edicao['id']:
                 supabase.table("servicos").update(dados).eq("id", id_em_edicao['id']).execute()
             else:
@@ -149,21 +171,23 @@ def main(page: ft.Page):
 
         btn_salvar_os.on_click = salvar_os
         btn_cancelar_edicao.on_click = lambda e: resetar_form()
-        conteudo_nova_os = ft.Column([lbl_titulo_os, txt_placa, txt_modelo, txt_cliente, ft.Divider(), txt_obs, btn_salvar_os, btn_cancelar_edicao])
+        container_nova_os = ft.Column([lbl_titulo_os, txt_placa, txt_modelo, txt_cliente, ft.Divider(), txt_obs, btn_salvar_os, btn_cancelar_edicao])
 
         # ABA 2: HISTORICO
-        hoje = datetime.date.today()
-        txt_dt_ini = ft.TextField(label="Início", value=str(hoje), width=140)
-        txt_dt_fim = ft.TextField(label="Fim", value=str(hoje), width=140)
+        txt_dt_ini = ft.TextField(label="Início", value=str(datetime.date.today()), width=140)
+        txt_dt_fim = ft.TextField(label="Fim", value=str(datetime.date.today()), width=140)
         dd_filtro_func = ft.Dropdown(label="Filtrar por Técnico", width=300, visible=False)
         lista_cards = ft.Column()
         btn_gerar = ft.FilledButton("GERAR LINK PDF", visible=False, width=300)
+        txt_feedback_pdf = ft.Text("", color="blue")
 
         def buscar(e):
             lista_cards.controls.clear(); dados_atuais.clear(); btn_gerar.visible = False; page.update()
             q = supabase.table("servicos").select("*").gte("data_hora", f"{txt_dt_ini.value}T00:00:00").lte("data_hora", f"{txt_dt_fim.value}T23:59:59").order("id", desc=True)
-            if dd_filtro_func.visible and dd_filtro_func.value != "todos": q = q.eq("usuario_id", dd_filtro_func.value)
-            elif not dd_filtro_func.visible: q = q.eq("usuario_id", usuario_atual['id'])
+            if dd_filtro_func.visible and dd_filtro_func.value != "todos" and dd_filtro_func.value:
+                q = q.eq("usuario_id", dd_filtro_func.value)
+            elif not dd_filtro_func.visible:
+                q = q.eq("usuario_id", usuario_atual['id'])
             
             res = q.execute()
             if res.data:
@@ -173,15 +197,24 @@ def main(page: ft.Page):
                         padding=10, border=ft.Border.all(1, "grey"), border_radius=8,
                         content=ft.Column([
                             ft.Row([ft.Text(f"PLACA: {item['placa']}", weight="bold"), ft.Text(f"{item['data_hora'][8:10]}/{item['data_hora'][5:7]}", color="grey")], alignment="spaceBetween"),
-                            ft.Text(f"Veículo: {item['modelo']}"), ft.Text(f"Cliente: {item['cliente']}", size=12),
-                            ft.Text(f"Feito: {item['observacoes']}", color="blue"),
+                            ft.Text(f"Veículo: {item.get('modelo','-')}"),
+                            ft.Text(f"Cliente: {item.get('cliente','-')}", size=12),
+                            ft.Text(f"Feito: {item.get('observacoes','-')}", color="blue"),
                             ft.Divider(),
-                            ft.Row([ft.TextButton("[EDITAR]", on_click=lambda e, i=item: preparar_editar(i)), 
-                                    ft.TextButton("[EXCLUIR]", on_click=lambda e, idx=item['id']: (supabase.table("servicos").delete().eq("id", idx).execute(), buscar(None)), style=ft.ButtonStyle(color="red"))], alignment="end")
+                            ft.Row([
+                                ft.TextButton("[EDITAR]", on_click=lambda e, i=item: preparar_edicao(i)),
+                                ft.TextButton("[EXCLUIR]", on_click=lambda e, idx=item['id']: (supabase.table("servicos").delete().eq("id", idx).execute(), buscar(None)), style=ft.ButtonStyle(color="red"))
+                            ], alignment="end")
                         ])
                     )
                     lista_cards.controls.append(card)
             page.update()
+
+        def preparar_edicao(item):
+            id_em_edicao['id'] = item['id']; txt_placa.value = item['placa']; txt_modelo.value = item['modelo']
+            txt_cliente.value = item['cliente']; txt_obs.value = item['observacoes']
+            lbl_titulo_os.value = f"EDITANDO REGISTRO #{item['id']}"; lbl_titulo_os.color = "orange"
+            btn_salvar_os.text = "SALVAR ALTERAÇÕES"; btn_cancelar_edicao.visible = True; ir_para_nova(None)
 
         def acao_gerar(e):
             btn_gerar.text = "PROCESSANDO..."; btn_gerar.disabled = True; page.update()
@@ -189,7 +222,6 @@ def main(page: ft.Page):
             if dd_filtro_func.visible and dd_filtro_func.value != "todos":
                 for opt in dd_filtro_func.options:
                     if opt.key == dd_filtro_func.value: nome_pdf = opt.text
-            
             url = gerar_pdf_nuvem(dados_atuais, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
             if url:
                 btn_gerar.url = f"https://wa.me/?text={urllib.parse.quote(f'Olá, segue o relatório: {url}')}"
@@ -197,44 +229,40 @@ def main(page: ft.Page):
             btn_gerar.disabled = False; page.update()
 
         btn_gerar.on_click = acao_gerar
-
-        def set_data(tipo):
-            h = datetime.date.today()
-            if tipo == 'hoje': txt_dt_ini.value = str(h); txt_dt_fim.value = str(h)
-            if tipo == 'mes': txt_dt_ini.value = str(h.replace(day=1)); txt_dt_fim.value = str(h)
-            if tipo == 'passado':
-                u_dia = h.replace(day=1) - timedelta(days=1)
-                txt_dt_ini.value = str(u_dia.replace(day=1)); txt_dt_fim.value = str(u_dia)
-            page.update()
-
-        conteudo_historico = ft.Column([
+        
+        container_historico = ft.Column([
             ft.Text("FILTRAR PERÍODO", size=14, weight="bold"),
-            ft.Row([ft.OutlinedButton("HOJE", on_click=lambda e: set_data('hoje')), ft.OutlinedButton("ESTE MÊS", on_click=lambda e: set_data('mes')), ft.OutlinedButton("MÊS PASSADO", on_click=lambda e: set_data('passado'))], alignment="center"),
+            ft.Row([
+                ft.OutlinedButton("HOJE", on_click=lambda e: (setattr(txt_dt_ini, 'value', str(datetime.date.today())), page.update())),
+                ft.OutlinedButton("ESTE MÊS", on_click=lambda e: (setattr(txt_dt_ini, 'value', str(datetime.date.today().replace(day=1))), page.update())),
+                ft.OutlinedButton("MÊS PASSADO", on_click=lambda e: (setattr(txt_dt_ini, 'value', str((datetime.date.today().replace(day=1) - timedelta(days=1)).replace(day=1))), page.update())),
+            ], alignment="center", wrap=True),
             ft.Row([txt_dt_ini, txt_dt_fim]),
             dd_filtro_func, ft.FilledButton("BUSCAR REGISTROS", on_click=buscar, width=300),
-            ft.Divider(), btn_gerar, lista_cards
+            txt_feedback_pdf, btn_gerar, lista_cards
         ])
 
-        area_conteudo = ft.Container(content=conteudo_nova_os)
-
-        def trocar_tela(nome):
-            if nome == "HISTORICO":
-                area_conteudo.content = conteudo_historico
-                setor = usuario_atual['setor'].lower()
-                if any(c in setor for c in ['admin', 'dono', 'gerente', 'chefe']):
-                    dd_filtro_func.visible = True
-                    if not dd_filtro_func.options:
-                        dd_filtro_func.options.append(ft.dropdown.Option(text="TODOS", key="todos"))
-                        for u in supabase.table("usuarios").select("id, nome").execute().data:
-                            dd_filtro_func.options.append(ft.dropdown.Option(text=u['nome'], key=str(u['id'])))
-                        dd_filtro_func.value = "todos"
-            else: area_conteudo.content = conteudo_nova_os
+        area_principal = ft.Container(content=container_nova_os)
+        def ir_para_nova(e): area_principal.content = container_nova_os; page.update()
+        def ir_para_hist(e):
+            area_principal.content = container_historico
+            setor = usuario_atual['setor'].lower()
+            if any(c in setor for c in ['admin', 'dono', 'gerente', 'chefe']):
+                dd_filtro_func.visible = True
+                if not dd_filtro_func.options:
+                    dd_filtro_func.options.append(ft.dropdown.Option(text="TODOS", key="todos"))
+                    for u in supabase.table("usuarios").select("id, nome").execute().data:
+                        dd_filtro_func.options.append(ft.dropdown.Option(text=u['nome'], key=str(u['id'])))
+                    dd_filtro_func.value = "todos"
             page.update()
 
-        # BARRA SUPERIOR ORIGINAL
-        page.add(ft.Container(bgcolor="blue", padding=10, content=ft.Row([ft.Column([ft.Text(f"Olá, {usuario_atual['nome']}", color="white", weight="bold"), ft.Text(f"Setor: {usuario_atual['setor']}", color="white", size=10)]), ft.FilledButton("SAIR", on_click=lambda e: tela_login(), style=ft.ButtonStyle(bgcolor="red"))], alignment="spaceBetween")))
-        page.add(ft.Row([ft.FilledButton("NOVA OS", expand=True, on_click=lambda e: trocar_tela("NOVA")), ft.FilledButton("HISTORICO", expand=True, on_click=lambda e: trocar_tela("HISTORICO"))]))
-        page.add(area_conteudo)
+        # BARRA SUPERIOR E MENU ORIGINAIS
+        page.add(ft.Container(bgcolor="blue", padding=10, content=ft.Row([
+            ft.Column([ft.Text(f"Olá, {usuario_atual['nome']}", color="white", weight="bold"), ft.Text(f"Setor: {usuario_atual['setor']}", color="white", size=10)]),
+            ft.FilledButton("SAIR", on_click=lambda e: tela_login(), style=ft.ButtonStyle(bgcolor="red"))
+        ], alignment="spaceBetween")))
+        page.add(ft.Row([ft.FilledButton("NOVA OS", expand=True, on_click=ir_para_nova), ft.FilledButton("HISTORICO", expand=True, on_click=ir_para_hist)]))
+        page.add(area_principal)
 
     tela_login()
 
