@@ -38,6 +38,7 @@ def main(page: ft.Page):
             pdf = FPDF()
             pdf.add_page()
             pdf.set_font("helvetica", "B", 16)
+            # Mantendo seu código original moderno (agora vai funcionar no Render por causa do requirements.txt)
             pdf.cell(0, 10, "RELATORIO DE SERVICOS", align="C", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("helvetica", "", 10)
             pdf.cell(0, 10, f"Periodo: {periodo}", align="C", new_x="LMARGIN", new_y="NEXT")
@@ -82,7 +83,7 @@ def main(page: ft.Page):
             print(f"Erro PDF: {ex}")
             return None
 
-    # --- TELA DE CADASTRO (DESIGN ORIGINAL) ---
+    # --- TELA DE CADASTRO ---
     def tela_cadastro():
         page.clean()
         txt_novo_nome = ft.TextField(label="Seu Nome Completo (Login)")
@@ -111,7 +112,7 @@ def main(page: ft.Page):
             ft.TextButton("Voltar para Login", on_click=lambda e: tela_login())
         ], alignment="center", horizontal_alignment="center"))
 
-    # --- TELA DE LOGIN (DESIGN ORIGINAL RESTAURADO) ---
+    # --- TELA DE LOGIN ---
     def tela_login():
         page.clean()
         txt_login_nome = ft.TextField(label="Digite seu Nome de Usuário", width=300)
@@ -142,7 +143,7 @@ def main(page: ft.Page):
             ft.OutlinedButton("CRIAR CONTA NOVA", on_click=lambda e: tela_cadastro(), width=200)
         ], alignment="center", horizontal_alignment="center"))
 
-    # --- SISTEMA PRINCIPAL (CARDS E ABA HISTORICO ORIGINAIS) ---
+    # --- SISTEMA PRINCIPAL ---
     def sistema_principal():
         page.clean()
         
@@ -178,11 +179,21 @@ def main(page: ft.Page):
         txt_dt_fim = ft.TextField(label="Fim", value=str(datetime.date.today()), width=140)
         dd_filtro_func = ft.Dropdown(label="Filtrar por Técnico", width=300, visible=False)
         lista_cards = ft.Column()
-        btn_gerar = ft.FilledButton("GERAR LINK PDF", visible=False, width=300)
+        
+        # --- MUDANÇA AQUI: Botões de Ação ---
+        btn_gerar = ft.FilledButton("GERAR RELATÓRIO PDF", visible=False, width=300)
         txt_feedback_pdf = ft.Text("", color="blue")
+        
+        # Container que vai segurar os dois botões (Invisível no começo)
+        linha_botoes_pdf = ft.Row(visible=False, alignment=ft.MainAxisAlignment.CENTER)
 
         def buscar(e):
-            lista_cards.controls.clear(); dados_atuais.clear(); btn_gerar.visible = False; page.update()
+            lista_cards.controls.clear(); dados_atuais.clear(); 
+            btn_gerar.visible = False
+            linha_botoes_pdf.visible = False # Esconde os botões se fizer nova busca
+            txt_feedback_pdf.value = ""
+            page.update()
+
             q = supabase.table("servicos").select("*").gte("data_hora", f"{txt_dt_ini.value}T00:00:00").lte("data_hora", f"{txt_dt_fim.value}T23:59:59").order("id", desc=True)
             if dd_filtro_func.visible and dd_filtro_func.value != "todos" and dd_filtro_func.value:
                 q = q.eq("usuario_id", dd_filtro_func.value)
@@ -222,11 +233,25 @@ def main(page: ft.Page):
             if dd_filtro_func.visible and dd_filtro_func.value != "todos":
                 for opt in dd_filtro_func.options:
                     if opt.key == dd_filtro_func.value: nome_pdf = opt.text
+            
             url = gerar_pdf_nuvem(dados_atuais, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
+            
             if url:
-                btn_gerar.url = f"https://wa.me/?text={urllib.parse.quote(f'Olá, segue o relatório: {url}')}"
-                btn_gerar.text = "WHATSAPP PRONTO - CLIQUE AQUI"; btn_gerar.bgcolor = "green"
-            btn_gerar.disabled = False; page.update()
+                # Cria os botões dinamicamente com o link gerado
+                link_zap = f"https://wa.me/?text={urllib.parse.quote(f'Olá, segue o relatório: {url}')}"
+                
+                btn_zap = ft.FilledButton("ENVIAR WHATSAPP", url=link_zap, style=ft.ButtonStyle(bgcolor="green"), expand=True)
+                btn_abrir = ft.FilledButton("ABRIR PDF", url=url, expand=True) # Botão para o PC
+
+                linha_botoes_pdf.controls = [btn_zap, btn_abrir]
+                linha_botoes_pdf.visible = True
+                
+                txt_feedback_pdf.value = "Relatório pronto! Escolha uma opção:"
+                btn_gerar.visible = False # Esconde o botão de gerar para evitar confusão
+                
+            btn_gerar.text = "GERAR RELATÓRIO PDF"
+            btn_gerar.disabled = False
+            page.update()
 
         btn_gerar.on_click = acao_gerar
         
@@ -239,7 +264,10 @@ def main(page: ft.Page):
             ], alignment="center", wrap=True),
             ft.Row([txt_dt_ini, txt_dt_fim]),
             dd_filtro_func, ft.FilledButton("BUSCAR REGISTROS", on_click=buscar, width=300),
-            txt_feedback_pdf, btn_gerar, lista_cards
+            txt_feedback_pdf, 
+            btn_gerar, 
+            linha_botoes_pdf, # Adicionado aqui a linha com os dois botões
+            lista_cards
         ])
 
         area_principal = ft.Container(content=container_nova_os)
@@ -256,7 +284,7 @@ def main(page: ft.Page):
                     dd_filtro_func.value = "todos"
             page.update()
 
-        # BARRA SUPERIOR E MENU ORIGINAIS
+        # BARRA SUPERIOR E MENU
         page.add(ft.Container(bgcolor="blue", padding=10, content=ft.Row([
             ft.Column([ft.Text(f"Olá, {usuario_atual['nome']}", color="white", weight="bold"), ft.Text(f"Setor: {usuario_atual['setor']}", color="white", size=10)]),
             ft.FilledButton("SAIR", on_click=lambda e: tela_login(), style=ft.ButtonStyle(bgcolor="red"))
