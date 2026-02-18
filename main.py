@@ -84,7 +84,7 @@ def main(page: ft.Page):
             print(f"Erro PDF: {ex}")
             return None
 
-    # --- GERADOR DE WORD (COMISSÃO - CORRIGIDO) ---
+    # --- GERADOR DE WORD (COMISSÃO) ---
     def gerar_word_nuvem(lista_dados, periodo, nome_usuario):
         try:
             doc = Document()
@@ -94,27 +94,23 @@ def main(page: ft.Page):
             run.bold = True
             run.font.size = Pt(14)
             
-            # --- SUPER FILTRO CORRIGIDO ---
+            # --- SUPER FILTRO V50 ---
             normais = []
             extras = []
             
             for item in lista_dados:
+                # Verificação simplificada e robusta
                 val_extra = item.get('is_extra')
                 eh_extra = False
                 
-                # Verifica se é True booleano
-                if isinstance(val_extra, bool) and val_extra is True:
-                    eh_extra = True
-                # Verifica se é texto "true" (caso o banco mande como string)
-                elif str(val_extra).lower() in ['true', '1', 'yes', 't']:
+                # Aceita True (bool) ou "true" (string)
+                if str(val_extra).lower() == 'true':
                     eh_extra = True
                 
                 if eh_extra:
                     extras.append(item)
                 else:
                     normais.append(item)
-
-            print(f"DEBUG WORD: Total {len(lista_dados)} | Normais {len(normais)} | Extras {len(extras)}")
 
             # --- TABELA 1: SERVIÇO NORMAL ---
             tabela = doc.add_table(rows=1, cols=5)
@@ -314,6 +310,16 @@ def main(page: ft.Page):
         txt_feedback_pdf = ft.Text("", color="blue")
         linha_botoes_pdf = ft.Row(visible=False, alignment=ft.MainAxisAlignment.CENTER, wrap=True) 
 
+        # --- FUNÇÃO HELPER PARA BUSCAR DADOS ---
+        # Garante que usamos a mesma lógica na tela e no relatório
+        def realizar_consulta_banco():
+            q = supabase.table("servicos").select("*").gte("data_hora", f"{txt_dt_ini.value}T00:00:00").lte("data_hora", f"{txt_dt_fim.value}T23:59:59").order("id", desc=True)
+            if dd_filtro_func.visible and dd_filtro_func.value != "todos" and dd_filtro_func.value:
+                q = q.eq("usuario_id", dd_filtro_func.value)
+            elif not dd_filtro_func.visible:
+                q = q.eq("usuario_id", usuario_atual['id'])
+            return q.execute().data
+
         def buscar(e):
             lista_cards.controls.clear(); dados_atuais.clear(); 
             btn_gerar.visible = False
@@ -321,16 +327,14 @@ def main(page: ft.Page):
             txt_feedback_pdf.value = ""
             page.update()
 
-            q = supabase.table("servicos").select("*").gte("data_hora", f"{txt_dt_ini.value}T00:00:00").lte("data_hora", f"{txt_dt_fim.value}T23:59:59").order("id", desc=True)
-            if dd_filtro_func.visible and dd_filtro_func.value != "todos" and dd_filtro_func.value:
-                q = q.eq("usuario_id", dd_filtro_func.value)
-            elif not dd_filtro_func.visible:
-                q = q.eq("usuario_id", usuario_atual['id'])
+            dados_frescos = realizar_consulta_banco() # Busca no banco
             
-            res = q.execute()
-            if res.data:
-                dados_atuais.extend(res.data); btn_gerar.visible = True
-                for item in res.data:
+            if dados_frescos:
+                # Atualiza a memória
+                dados_atuais.extend(dados_frescos)
+                btn_gerar.visible = True
+                
+                for item in dados_frescos:
                     texto_extra = " [EXTRA]" if item.get('is_extra') else ""
                     card = ft.Container(
                         padding=10, border=ft.Border.all(1, "grey"), border_radius=8,
@@ -359,13 +363,19 @@ def main(page: ft.Page):
 
         def acao_gerar(e):
             btn_gerar.text = "PROCESSANDO..."; btn_gerar.disabled = True; page.update()
+            
+            # --- CORREÇÃO V50: Busca dados FRESCOS do banco agora ---
+            # Ignora a lista antiga e busca de novo para pegar o que acabou de salvar
+            dados_para_relatorio = realizar_consulta_banco()
+            
             nome_pdf = usuario_atual['nome']
             if dd_filtro_func.visible and dd_filtro_func.value != "todos":
                 for opt in dd_filtro_func.options:
                     if opt.key == dd_filtro_func.value: nome_pdf = opt.text
             
-            url_pdf = gerar_pdf_nuvem(dados_atuais, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
-            url_word = gerar_word_nuvem(dados_atuais, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
+            # Passa a lista nova (dados_para_relatorio) em vez da velha (dados_atuais)
+            url_pdf = gerar_pdf_nuvem(dados_para_relatorio, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
+            url_word = gerar_word_nuvem(dados_para_relatorio, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
             
             botoes = []
             if url_pdf:
