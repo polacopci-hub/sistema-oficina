@@ -69,8 +69,10 @@ def main(page: ft.Page):
                 pdf.cell(35, 8, cliente, border=1, align="C") 
                 pdf.cell(0, 8, obs_texto, border=1, new_x="LMARGIN", new_y="NEXT")
 
-            data_hoje = datetime.datetime.now().strftime("%Y-%m-%d")
-            nome_arq = f"Relatorio_{limpar_nome_arquivo(nome_usuario)}_{data_hoje}.pdf"
+            # CORREÇÃO V51: Nome Único com Hora/Minuto/Segundo para evitar Cache
+            agora = datetime.datetime.now()
+            nome_arq = f"Relatorio_{limpar_nome_arquivo(nome_usuario)}_{agora.strftime('%Y%m%d_%H%M%S')}.pdf"
+            
             pdf.output(nome_arq)
 
             with open(nome_arq, "rb") as f:
@@ -84,7 +86,7 @@ def main(page: ft.Page):
             print(f"Erro PDF: {ex}")
             return None
 
-    # --- GERADOR DE WORD (COMISSÃO) ---
+    # --- GERADOR DE WORD ---
     def gerar_word_nuvem(lista_dados, periodo, nome_usuario):
         try:
             doc = Document()
@@ -94,17 +96,16 @@ def main(page: ft.Page):
             run.bold = True
             run.font.size = Pt(14)
             
-            # --- SUPER FILTRO V50 ---
+            # --- SUPER FILTRO V51 (Blindado) ---
             normais = []
             extras = []
             
             for item in lista_dados:
-                # Verificação simplificada e robusta
                 val_extra = item.get('is_extra')
                 eh_extra = False
                 
-                # Aceita True (bool) ou "true" (string)
-                if str(val_extra).lower() == 'true':
+                # Aceita True (bool), "true" (string) ou 1 (int)
+                if str(val_extra).lower() in ['true', '1', 'yes']:
                     eh_extra = True
                 
                 if eh_extra:
@@ -112,7 +113,7 @@ def main(page: ft.Page):
                 else:
                     normais.append(item)
 
-            # --- TABELA 1: SERVIÇO NORMAL ---
+            # Tabela Normal
             tabela = doc.add_table(rows=1, cols=5)
             tabela.style = 'Table Grid'
             hdr_cells = tabela.rows[0].cells
@@ -136,7 +137,7 @@ def main(page: ft.Page):
 
             doc.add_paragraph("\n")
 
-            # --- TABELA 2: EXTRA ---
+            # Tabela Extra
             titulo_extra = doc.add_paragraph()
             run_ex = titulo_extra.add_run("Extra")
             run_ex.bold = True
@@ -162,8 +163,10 @@ def main(page: ft.Page):
             row_total_ex[3].text = "TOTAL"
             row_total_ex[4].text = ""
 
-            data_hoje = datetime.datetime.now().strftime("%Y-%m-%d")
-            nome_arq = f"Comissao_{limpar_nome_arquivo(nome_usuario)}_{data_hoje}.docx"
+            # CORREÇÃO V51: Nome Único com Hora/Minuto/Segundo
+            agora = datetime.datetime.now()
+            nome_arq = f"Comissao_{limpar_nome_arquivo(nome_usuario)}_{agora.strftime('%Y%m%d_%H%M%S')}.docx"
+            
             doc.save(nome_arq)
 
             with open(nome_arq, "rb") as f:
@@ -310,8 +313,6 @@ def main(page: ft.Page):
         txt_feedback_pdf = ft.Text("", color="blue")
         linha_botoes_pdf = ft.Row(visible=False, alignment=ft.MainAxisAlignment.CENTER, wrap=True) 
 
-        # --- FUNÇÃO HELPER PARA BUSCAR DADOS ---
-        # Garante que usamos a mesma lógica na tela e no relatório
         def realizar_consulta_banco():
             q = supabase.table("servicos").select("*").gte("data_hora", f"{txt_dt_ini.value}T00:00:00").lte("data_hora", f"{txt_dt_fim.value}T23:59:59").order("id", desc=True)
             if dd_filtro_func.visible and dd_filtro_func.value != "todos" and dd_filtro_func.value:
@@ -327,13 +328,11 @@ def main(page: ft.Page):
             txt_feedback_pdf.value = ""
             page.update()
 
-            dados_frescos = realizar_consulta_banco() # Busca no banco
+            dados_frescos = realizar_consulta_banco()
             
             if dados_frescos:
-                # Atualiza a memória
                 dados_atuais.extend(dados_frescos)
                 btn_gerar.visible = True
-                
                 for item in dados_frescos:
                     texto_extra = " [EXTRA]" if item.get('is_extra') else ""
                     card = ft.Container(
@@ -357,15 +356,12 @@ def main(page: ft.Page):
             id_em_edicao['id'] = item['id']; txt_placa.value = item['placa']; txt_modelo.value = item['modelo']
             txt_cliente.value = item['cliente']; txt_obs.value = item['observacoes']
             chk_extra.value = item.get('is_extra', False)
-            
             lbl_titulo_os.value = f"EDITANDO REGISTRO #{item['id']}"; lbl_titulo_os.color = "orange"
             btn_salvar_os.text = "SALVAR ALTERAÇÕES"; btn_cancelar_edicao.visible = True; ir_para_nova(None)
 
         def acao_gerar(e):
             btn_gerar.text = "PROCESSANDO..."; btn_gerar.disabled = True; page.update()
             
-            # --- CORREÇÃO V50: Busca dados FRESCOS do banco agora ---
-            # Ignora a lista antiga e busca de novo para pegar o que acabou de salvar
             dados_para_relatorio = realizar_consulta_banco()
             
             nome_pdf = usuario_atual['nome']
@@ -373,7 +369,6 @@ def main(page: ft.Page):
                 for opt in dd_filtro_func.options:
                     if opt.key == dd_filtro_func.value: nome_pdf = opt.text
             
-            # Passa a lista nova (dados_para_relatorio) em vez da velha (dados_atuais)
             url_pdf = gerar_pdf_nuvem(dados_para_relatorio, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
             url_word = gerar_word_nuvem(dados_para_relatorio, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
             
