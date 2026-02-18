@@ -1,4 +1,4 @@
-flet>=0.90.0
+flet
 supabase
 fpdf2
 python-docx
