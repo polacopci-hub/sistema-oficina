@@ -181,9 +181,9 @@ def main(page: ft.Page):
         btn_salvar_cad = ft.FilledButton("SALVAR CADASTRO", width=300, height=50)
 
         def salvar_usuario(e):
-            # FEEDBACK COM PAUSA
+            # FEEDBACK - Usando string direta
             btn_salvar_cad.text = "AGUARDE..."
-            btn_salvar_cad.bgcolor = ft.colors.GREY # Agora o Render vai entender isso!
+            btn_salvar_cad.bgcolor = "grey"
             btn_salvar_cad.disabled = True
             page.update()
             time.sleep(0.1)
@@ -191,7 +191,7 @@ def main(page: ft.Page):
             if not txt_novo_nome.value or not txt_novo_pin.value:
                 txt_msg_erro.value = "Erro: Preencha os campos!"
                 btn_salvar_cad.text = "SALVAR CADASTRO"
-                btn_salvar_cad.bgcolor = ft.colors.PRIMARY
+                btn_salvar_cad.bgcolor = "blue"
                 btn_salvar_cad.disabled = False
                 page.update()
                 return
@@ -208,7 +208,7 @@ def main(page: ft.Page):
             except: 
                 txt_msg_erro.value = "Erro ao cadastrar"
                 btn_salvar_cad.text = "SALVAR CADASTRO"
-                btn_salvar_cad.bgcolor = ft.colors.PRIMARY
+                btn_salvar_cad.bgcolor = "blue"
                 btn_salvar_cad.disabled = False
                 page.update()
 
@@ -233,9 +233,9 @@ def main(page: ft.Page):
         btn_entrar = ft.FilledButton("ENTRAR", width=200, height=50)
 
         def logar(e):
-            # FEEDBACK
+            # FEEDBACK - Cores em string
             btn_entrar.text = "VERIFICANDO..."
-            btn_entrar.bgcolor = ft.colors.GREY
+            btn_entrar.bgcolor = "grey"
             btn_entrar.disabled = True
             txt_aviso_login.value = ""
             page.update()
@@ -247,7 +247,7 @@ def main(page: ft.Page):
             if not nome_limpo or not pin_limpo:
                 txt_aviso_login.value = "Preencha os campos!"
                 btn_entrar.text = "ENTRAR"
-                btn_entrar.bgcolor = ft.colors.PRIMARY
+                btn_entrar.bgcolor = "blue"
                 btn_entrar.disabled = False
                 page.update()
                 return
@@ -268,13 +268,13 @@ def main(page: ft.Page):
                 else:
                     txt_aviso_login.value = "Senha ou Usuário Incorretos!"
                     btn_entrar.text = "ENTRAR"
-                    btn_entrar.bgcolor = ft.colors.PRIMARY
+                    btn_entrar.bgcolor = "blue"
                     btn_entrar.disabled = False
                     page.update()
             except Exception as ex:
                 txt_aviso_login.value = "Erro de Conexão."
                 btn_entrar.text = "ENTRAR"
-                btn_entrar.bgcolor = ft.colors.PRIMARY
+                btn_entrar.bgcolor = "blue"
                 btn_entrar.disabled = False
                 page.update()
 
@@ -309,7 +309,7 @@ def main(page: ft.Page):
 
         def resetar_form():
             id_em_edicao['id'] = None; lbl_titulo_os.value = "NOVA ORDEM DE SERVICO"; lbl_titulo_os.color = "black"
-            btn_salvar_os.text = "SALVAR REGISTRO"; btn_salvar_os.bgcolor = ft.colors.PRIMARY
+            btn_salvar_os.text = "SALVAR REGISTRO"; btn_salvar_os.bgcolor = "blue"
             btn_cancelar_edicao.visible = False
             txt_placa.value = ""; txt_modelo.value = ""; txt_cliente.value = ""; txt_obs.value = ""
             chk_extra.value = False 
@@ -321,7 +321,7 @@ def main(page: ft.Page):
             
             # FEEDBACK
             btn_salvar_os.text = "SALVANDO..."
-            btn_salvar_os.bgcolor = ft.colors.GREY
+            btn_salvar_os.bgcolor = "grey"
             btn_salvar_os.disabled = True
             page.update()
             time.sleep(0.1) 
@@ -345,7 +345,7 @@ def main(page: ft.Page):
                 resetar_form() 
             except:
                 btn_salvar_os.text = "ERRO - TENTAR NOVAMENTE"
-                btn_salvar_os.bgcolor = ft.colors.RED
+                btn_salvar_os.bgcolor = "red"
                 btn_salvar_os.disabled = False
                 page.update()
 
@@ -375,7 +375,7 @@ def main(page: ft.Page):
         def buscar(e):
             # FEEDBACK
             btn_buscar.text = "BUSCANDO..."
-            btn_buscar.bgcolor = ft.colors.GREY
+            btn_buscar.bgcolor = "grey"
             btn_buscar.disabled = True
             lista_cards.controls.clear()
             dados_atuais.clear()
@@ -414,7 +414,7 @@ def main(page: ft.Page):
                 lista_cards.controls.append(ft.Text(f"Erro ao buscar: {ex}", color="red"))
             
             btn_buscar.text = "BUSCAR REGISTROS"
-            btn_buscar.bgcolor = ft.colors.PRIMARY
+            btn_buscar.bgcolor = "blue"
             btn_buscar.disabled = False
             page.update()
 
@@ -430,7 +430,7 @@ def main(page: ft.Page):
         def acao_gerar(e):
             # FEEDBACK
             btn_gerar.text = "PROCESSANDO..."
-            btn_gerar.bgcolor = ft.colors.GREY
+            btn_gerar.bgcolor = "grey"
             btn_gerar.disabled = True
             page.update()
             time.sleep(0.1)
@@ -463,7 +463,7 @@ def main(page: ft.Page):
                 txt_feedback_pdf.value = "Erro ao gerar arquivos."
                 
             btn_gerar.text = "GERAR RELATÓRIO"
-            btn_gerar.bgcolor = ft.colors.PRIMARY
+            btn_gerar.bgcolor = "blue"
             btn_gerar.disabled = False
             page.update()
 
