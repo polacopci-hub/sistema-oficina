@@ -8,7 +8,6 @@ from datetime import timedelta
 import os
 import re
 import urllib.parse 
-import time
 
 # --- CONFIGURAÇÃO DO BANCO ---
 SUPABASE_URL = "https://mwqwceayaouowgehuukf.supabase.co"
@@ -181,13 +180,12 @@ def main(page: ft.Page):
         btn_salvar_cad = ft.FilledButton("SALVAR CADASTRO", width=300, height=50)
 
         def salvar_usuario(e):
-            # FEEDBACK FORTE: 0.5s de pausa
+            # FEEDBACK SIMPLES (Sem Sleep)
             btn_salvar_cad.text = "SALVANDO..."
             btn_salvar_cad.bgcolor = "grey"
             btn_salvar_cad.disabled = True
             page.update()
-            time.sleep(0.5)
-
+            
             if not txt_novo_nome.value or not txt_novo_pin.value:
                 txt_msg_erro.value = "Erro: Preencha os campos!"
                 btn_salvar_cad.text = "SALVAR CADASTRO"
@@ -233,14 +231,13 @@ def main(page: ft.Page):
         btn_entrar = ft.FilledButton("ENTRAR", width=200, height=50)
 
         def logar(e):
-            # FEEDBACK FORTE: 0.5s de pausa
+            # FEEDBACK SIMPLES (Sem Sleep)
             btn_entrar.text = "VERIFICANDO..."
             btn_entrar.bgcolor = "grey"
             btn_entrar.disabled = True
             txt_aviso_login.value = ""
             page.update()
-            time.sleep(0.5)
-
+            
             nome_limpo = txt_login_nome.value.strip() 
             pin_limpo = txt_login_pin.value.strip()   
             
@@ -319,12 +316,11 @@ def main(page: ft.Page):
         def salvar_os(e):
             if not txt_obs.value or not txt_placa.value: return
             
-            # FEEDBACK FORTE
+            # FEEDBACK
             btn_salvar_os.text = "SALVANDO..."
             btn_salvar_os.bgcolor = "grey"
             btn_salvar_os.disabled = True
             page.update()
-            time.sleep(0.5)
             
             try:
                 dados = {
@@ -353,8 +349,12 @@ def main(page: ft.Page):
         btn_cancelar_edicao.on_click = lambda e: resetar_form()
         container_nova_os = ft.Column([lbl_titulo_os, txt_placa, txt_modelo, txt_cliente, ft.Divider(), txt_obs, chk_extra, btn_salvar_os, btn_cancelar_edicao])
 
-        txt_dt_ini = ft.TextField(label="Início", value=str(datetime.date.today()), width=140)
+        # --- CORREÇÃO DE DATA PADRÃO: INICIA COM O MÊS ATUAL ---
+        # Isso evita que a lista venha vazia se não houver serviço hoje
+        primeiro_dia_mes = datetime.date.today().replace(day=1)
+        txt_dt_ini = ft.TextField(label="Início", value=str(primeiro_dia_mes), width=140)
         txt_dt_fim = ft.TextField(label="Fim", value=str(datetime.date.today()), width=140)
+        
         dd_filtro_func = ft.Dropdown(label="Filtrar por Técnico", width=300, visible=False)
         lista_cards = ft.Column()
         
@@ -365,22 +365,23 @@ def main(page: ft.Page):
         linha_botoes_pdf = ft.Row(visible=False, alignment=ft.MainAxisAlignment.CENTER, wrap=True) 
 
         def realizar_consulta_banco():
-            # CORREÇÃO DA BUSCA: Diagnóstico e Query
-            print(f"DEBUG: Buscando de {txt_dt_ini.value} ate {txt_dt_fim.value}...")
-            
+            # Filtro de datas
             q = supabase.table("servicos").select("*").gte("data_hora", f"{txt_dt_ini.value}T00:00:00").lte("data_hora", f"{txt_dt_fim.value}T23:59:59").order("id", desc=True)
             
-            # Filtro de Usuário (Só aplica se não for 'todos' e estiver visível)
-            if dd_filtro_func.visible and dd_filtro_func.value != "todos" and dd_filtro_func.value:
-                q = q.eq("usuario_id", dd_filtro_func.value)
-            elif not dd_filtro_func.visible:
-                # Se não é admin/gerente, só vê os seus
+            # Filtro de Usuário (Corrigido para evitar bloqueio acidental)
+            if dd_filtro_func.visible:
+                # Se for Admin e escolheu alguém específico
+                if dd_filtro_func.value and dd_filtro_func.value != "todos":
+                    q = q.eq("usuario_id", dd_filtro_func.value)
+                # Se for Admin e escolheu "todos", NÃO faz filtro de ID (mostra tudo)
+            else:
+                # Se NÃO é admin, filtra apenas os dele
                 q = q.eq("usuario_id", usuario_atual['id'])
             
             return q.execute().data
 
         def buscar(e):
-            # FEEDBACK FORTE
+            # FEEDBACK
             btn_buscar.text = "BUSCANDO..."
             btn_buscar.bgcolor = "grey"
             btn_buscar.disabled = True
@@ -390,8 +391,7 @@ def main(page: ft.Page):
             linha_botoes_pdf.visible = False
             txt_feedback_pdf.value = ""
             page.update()
-            time.sleep(0.5) # Pausa dramática para o visual atualizar
-
+            
             try:
                 dados_frescos = realizar_consulta_banco()
                 
@@ -418,7 +418,6 @@ def main(page: ft.Page):
                 else:
                     lista_cards.controls.append(ft.Text("Nenhum registro encontrado neste período.", color="red"))
             except Exception as ex:
-                print(f"Erro Busca: {ex}")
                 lista_cards.controls.append(ft.Text(f"Erro ao buscar: {ex}", color="red"))
             
             btn_buscar.text = "BUSCAR REGISTROS"
@@ -436,14 +435,14 @@ def main(page: ft.Page):
             btn_salvar_os.text = "SALVAR ALTERAÇÕES"; btn_cancelar_edicao.visible = True; ir_para_nova(None)
 
         def acao_gerar(e):
-            # FEEDBACK FORTE
+            # FEEDBACK
             btn_gerar.text = "PROCESSANDO..."
             btn_gerar.bgcolor = "grey"
             btn_gerar.disabled = True
             page.update()
-            time.sleep(0.5)
             
             try:
+                # Garante que pega os dados ATUAIS do banco antes de gerar
                 dados_para_relatorio = realizar_consulta_banco()
                 
                 nome_pdf = usuario_atual['nome']
