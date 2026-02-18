@@ -1,6 +1,6 @@
 import flet as ft
 from supabase import create_client, Client
-from fpdf import FPDF
+from fpdf import FPDF2 # O requirements.txt garante que o Render use a versão nova
 import datetime
 from datetime import timedelta
 import os
@@ -38,7 +38,7 @@ def main(page: ft.Page):
             pdf = FPDF()
             pdf.add_page()
             pdf.set_font("helvetica", "B", 16)
-            # Mantendo seu código original moderno (agora vai funcionar no Render por causa do requirements.txt)
+            
             pdf.cell(0, 10, "RELATORIO DE SERVICOS", align="C", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("helvetica", "", 10)
             pdf.cell(0, 10, f"Periodo: {periodo}", align="C", new_x="LMARGIN", new_y="NEXT")
@@ -122,8 +122,16 @@ def main(page: ft.Page):
 
         def logar(e):
             txt_aviso_login.value = "Verificando..."; page.update()
-            res = supabase.table("usuarios").select("*").ilike("nome", txt_login_nome.value).execute()
-            if res.data and res.data[0]['pin'] == txt_login_pin.value:
+            
+            # --- CORREÇÃO APLICADA AQUI: REMOVENDO ESPAÇOS ---
+            nome_limpo = txt_login_nome.value.strip() # Remove espaços antes e depois
+            pin_limpo = txt_login_pin.value.strip()   # Remove espaços antes e depois
+            
+            # Usa o nome limpo para buscar no banco
+            res = supabase.table("usuarios").select("*").ilike("nome", nome_limpo).execute()
+            
+            # Compara com o pin limpo
+            if res.data and res.data[0]['pin'] == pin_limpo:
                 usuario_atual.update(res.data[0])
                 sistema_principal()
             else:
@@ -180,7 +188,7 @@ def main(page: ft.Page):
         dd_filtro_func = ft.Dropdown(label="Filtrar por Técnico", width=300, visible=False)
         lista_cards = ft.Column()
         
-        # --- MUDANÇA AQUI: Botões de Ação ---
+        # Botões de Ação
         btn_gerar = ft.FilledButton("GERAR RELATÓRIO PDF", visible=False, width=300)
         txt_feedback_pdf = ft.Text("", color="blue")
         
@@ -190,7 +198,7 @@ def main(page: ft.Page):
         def buscar(e):
             lista_cards.controls.clear(); dados_atuais.clear(); 
             btn_gerar.visible = False
-            linha_botoes_pdf.visible = False # Esconde os botões se fizer nova busca
+            linha_botoes_pdf.visible = False 
             txt_feedback_pdf.value = ""
             page.update()
 
@@ -237,17 +245,15 @@ def main(page: ft.Page):
             url = gerar_pdf_nuvem(dados_atuais, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
             
             if url:
-                # Cria os botões dinamicamente com o link gerado
                 link_zap = f"https://wa.me/?text={urllib.parse.quote(f'Olá, segue o relatório: {url}')}"
-                
                 btn_zap = ft.FilledButton("ENVIAR WHATSAPP", url=link_zap, style=ft.ButtonStyle(bgcolor="green"), expand=True)
-                btn_abrir = ft.FilledButton("ABRIR PDF", url=url, expand=True) # Botão para o PC
+                btn_abrir = ft.FilledButton("ABRIR PDF", url=url, expand=True) 
 
                 linha_botoes_pdf.controls = [btn_zap, btn_abrir]
                 linha_botoes_pdf.visible = True
                 
                 txt_feedback_pdf.value = "Relatório pronto! Escolha uma opção:"
-                btn_gerar.visible = False # Esconde o botão de gerar para evitar confusão
+                btn_gerar.visible = False 
                 
             btn_gerar.text = "GERAR RELATÓRIO PDF"
             btn_gerar.disabled = False
@@ -266,7 +272,7 @@ def main(page: ft.Page):
             dd_filtro_func, ft.FilledButton("BUSCAR REGISTROS", on_click=buscar, width=300),
             txt_feedback_pdf, 
             btn_gerar, 
-            linha_botoes_pdf, # Adicionado aqui a linha com os dois botões
+            linha_botoes_pdf, 
             lista_cards
         ])
 
