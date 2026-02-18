@@ -181,12 +181,12 @@ def main(page: ft.Page):
         btn_salvar_cad = ft.FilledButton("SALVAR CADASTRO", width=300, height=50)
 
         def salvar_usuario(e):
-            # FEEDBACK - Usando string direta
-            btn_salvar_cad.text = "AGUARDE..."
+            # FEEDBACK FORTE: 0.5s de pausa
+            btn_salvar_cad.text = "SALVANDO..."
             btn_salvar_cad.bgcolor = "grey"
             btn_salvar_cad.disabled = True
             page.update()
-            time.sleep(0.1)
+            time.sleep(0.5)
 
             if not txt_novo_nome.value or not txt_novo_pin.value:
                 txt_msg_erro.value = "Erro: Preencha os campos!"
@@ -233,13 +233,13 @@ def main(page: ft.Page):
         btn_entrar = ft.FilledButton("ENTRAR", width=200, height=50)
 
         def logar(e):
-            # FEEDBACK - Cores em string
+            # FEEDBACK FORTE: 0.5s de pausa
             btn_entrar.text = "VERIFICANDO..."
             btn_entrar.bgcolor = "grey"
             btn_entrar.disabled = True
             txt_aviso_login.value = ""
             page.update()
-            time.sleep(0.1)
+            time.sleep(0.5)
 
             nome_limpo = txt_login_nome.value.strip() 
             pin_limpo = txt_login_pin.value.strip()   
@@ -319,12 +319,12 @@ def main(page: ft.Page):
         def salvar_os(e):
             if not txt_obs.value or not txt_placa.value: return
             
-            # FEEDBACK
+            # FEEDBACK FORTE
             btn_salvar_os.text = "SALVANDO..."
             btn_salvar_os.bgcolor = "grey"
             btn_salvar_os.disabled = True
             page.update()
-            time.sleep(0.1) 
+            time.sleep(0.5)
             
             try:
                 dados = {
@@ -365,15 +365,22 @@ def main(page: ft.Page):
         linha_botoes_pdf = ft.Row(visible=False, alignment=ft.MainAxisAlignment.CENTER, wrap=True) 
 
         def realizar_consulta_banco():
+            # CORREÇÃO DA BUSCA: Diagnóstico e Query
+            print(f"DEBUG: Buscando de {txt_dt_ini.value} ate {txt_dt_fim.value}...")
+            
             q = supabase.table("servicos").select("*").gte("data_hora", f"{txt_dt_ini.value}T00:00:00").lte("data_hora", f"{txt_dt_fim.value}T23:59:59").order("id", desc=True)
+            
+            # Filtro de Usuário (Só aplica se não for 'todos' e estiver visível)
             if dd_filtro_func.visible and dd_filtro_func.value != "todos" and dd_filtro_func.value:
                 q = q.eq("usuario_id", dd_filtro_func.value)
             elif not dd_filtro_func.visible:
+                # Se não é admin/gerente, só vê os seus
                 q = q.eq("usuario_id", usuario_atual['id'])
+            
             return q.execute().data
 
         def buscar(e):
-            # FEEDBACK
+            # FEEDBACK FORTE
             btn_buscar.text = "BUSCANDO..."
             btn_buscar.bgcolor = "grey"
             btn_buscar.disabled = True
@@ -383,7 +390,7 @@ def main(page: ft.Page):
             linha_botoes_pdf.visible = False
             txt_feedback_pdf.value = ""
             page.update()
-            time.sleep(0.1)
+            time.sleep(0.5) # Pausa dramática para o visual atualizar
 
             try:
                 dados_frescos = realizar_consulta_banco()
@@ -409,8 +416,9 @@ def main(page: ft.Page):
                         )
                         lista_cards.controls.append(card)
                 else:
-                    lista_cards.controls.append(ft.Text("Nenhum registro encontrado.", color="grey"))
+                    lista_cards.controls.append(ft.Text("Nenhum registro encontrado neste período.", color="red"))
             except Exception as ex:
+                print(f"Erro Busca: {ex}")
                 lista_cards.controls.append(ft.Text(f"Erro ao buscar: {ex}", color="red"))
             
             btn_buscar.text = "BUSCAR REGISTROS"
@@ -428,12 +436,12 @@ def main(page: ft.Page):
             btn_salvar_os.text = "SALVAR ALTERAÇÕES"; btn_cancelar_edicao.visible = True; ir_para_nova(None)
 
         def acao_gerar(e):
-            # FEEDBACK
+            # FEEDBACK FORTE
             btn_gerar.text = "PROCESSANDO..."
             btn_gerar.bgcolor = "grey"
             btn_gerar.disabled = True
             page.update()
-            time.sleep(0.1)
+            time.sleep(0.5)
             
             try:
                 dados_para_relatorio = realizar_consulta_banco()
