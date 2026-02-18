@@ -69,10 +69,8 @@ def main(page: ft.Page):
                 pdf.cell(35, 8, cliente, border=1, align="C") 
                 pdf.cell(0, 8, obs_texto, border=1, new_x="LMARGIN", new_y="NEXT")
 
-            # Nome único com timestamp para evitar cache
             agora = datetime.datetime.now()
             nome_arq = f"Relatorio_{limpar_nome_arquivo(nome_usuario)}_{agora.strftime('%Y%m%d_%H%M%S')}.pdf"
-            
             pdf.output(nome_arq)
 
             with open(nome_arq, "rb") as f:
@@ -96,13 +94,11 @@ def main(page: ft.Page):
             run.bold = True
             run.font.size = Pt(14)
             
-            # Lógica robusta de separação Extra/Normal
             normais = []
             extras = []
             for item in lista_dados:
                 val_extra = item.get('is_extra')
                 eh_extra = False
-                # Aceita True, 'true', '1', etc
                 if str(val_extra).lower() in ['true', '1', 'yes']:
                     eh_extra = True
                 
@@ -111,7 +107,6 @@ def main(page: ft.Page):
                 else:
                     normais.append(item)
 
-            # Tabela Normal
             tabela = doc.add_table(rows=1, cols=5)
             tabela.style = 'Table Grid'
             hdr_cells = tabela.rows[0].cells
@@ -135,7 +130,6 @@ def main(page: ft.Page):
 
             doc.add_paragraph("\n")
 
-            # Tabela Extra
             titulo_extra = doc.add_paragraph()
             run_ex = titulo_extra.add_run("Extra")
             run_ex.bold = True
@@ -161,7 +155,6 @@ def main(page: ft.Page):
             row_total_ex[3].text = "TOTAL"
             row_total_ex[4].text = ""
 
-            # Nome único com timestamp
             agora = datetime.datetime.now()
             nome_arq = f"Comissao_{limpar_nome_arquivo(nome_usuario)}_{agora.strftime('%Y%m%d_%H%M%S')}.docx"
             doc.save(nome_arq)
@@ -190,6 +183,12 @@ def main(page: ft.Page):
         def salvar_usuario(e):
             if not txt_novo_nome.value or not txt_novo_pin.value:
                 txt_msg_erro.value = "Erro: Preencha os campos!"; page.update(); return
+            
+            # Feedback Visual Seguro
+            btn_salvar_cad.text = "SALVANDO..."
+            btn_salvar_cad.disabled = True
+            page.update()
+
             try:
                 nome_limpo_cad = txt_novo_nome.value.strip()
                 pin_limpo_cad = txt_novo_pin.value.strip()
@@ -200,7 +199,11 @@ def main(page: ft.Page):
                     "ativo": True
                 }).execute()
                 tela_login()
-            except: txt_msg_erro.value = "Erro ao cadastrar"; page.update()
+            except: 
+                txt_msg_erro.value = "Erro ao cadastrar. Tente novamente."
+                btn_salvar_cad.text = "SALVAR CADASTRO"
+                btn_salvar_cad.disabled = False
+                page.update()
 
         btn_salvar_cad.on_click = salvar_usuario
         page.add(ft.Column([
@@ -223,27 +226,42 @@ def main(page: ft.Page):
         btn_entrar = ft.FilledButton("ENTRAR", width=200, height=50)
 
         def logar(e):
-            txt_aviso_login.value = "Verificando..."; page.update()
+            # Validação antes de enviar
+            if not txt_login_nome.value or not txt_login_pin.value:
+                txt_aviso_login.value = "Preencha todos os campos!"; page.update(); return
+
+            # Feedback Visual Seguro
+            txt_aviso_login.value = "Verificando..."
+            btn_entrar.text = "ENTRANDO..."
+            btn_entrar.disabled = True
+            page.update()
+
             nome_limpo = txt_login_nome.value.strip() 
             pin_limpo = txt_login_pin.value.strip()   
             
-            if not nome_limpo or not pin_limpo:
-                txt_aviso_login.value = "Preencha os campos!"; page.update(); return
-
-            res = supabase.table("usuarios").select("*").ilike("nome", f"{nome_limpo}%").execute()
-            
-            usuario_encontrado = None
-            if res.data:
-                for u in res.data:
-                    if u['pin'] == pin_limpo:
-                        usuario_encontrado = u
-                        break
-            
-            if usuario_encontrado:
-                usuario_atual.update(usuario_encontrado)
-                sistema_principal()
-            else:
-                txt_aviso_login.value = "Senha ou Usuário Incorretos!"; page.update()
+            try:
+                res = supabase.table("usuarios").select("*").ilike("nome", f"{nome_limpo}%").execute()
+                
+                usuario_encontrado = None
+                if res.data:
+                    for u in res.data:
+                        if u['pin'] == pin_limpo:
+                            usuario_encontrado = u
+                            break
+                
+                if usuario_encontrado:
+                    usuario_atual.update(usuario_encontrado)
+                    sistema_principal()
+                else:
+                    txt_aviso_login.value = "Senha ou Usuário Incorretos!"
+                    btn_entrar.text = "ENTRAR"
+                    btn_entrar.disabled = False
+                    page.update()
+            except Exception as ex:
+                txt_aviso_login.value = "Erro de conexão. Verifique sua internet."
+                btn_entrar.text = "ENTRAR"
+                btn_entrar.disabled = False
+                page.update()
 
         btn_entrar.on_click = logar
         page.add(ft.Column([
@@ -276,28 +294,52 @@ def main(page: ft.Page):
 
         def resetar_form():
             id_em_edicao['id'] = None; lbl_titulo_os.value = "NOVA ORDEM DE SERVICO"; lbl_titulo_os.color = "black"
-            btn_salvar_os.text = "SALVAR REGISTRO"; btn_cancelar_edicao.visible = False
+            btn_salvar_os.text = "SALVAR REGISTRO"; btn_salvar_os.disabled = False
+            btn_cancelar_edicao.visible = False
             txt_placa.value = ""; txt_modelo.value = ""; txt_cliente.value = ""; txt_obs.value = ""
             chk_extra.value = False 
             page.update()
 
         def salvar_os(e):
-            if not txt_obs.value or not txt_placa.value: return
+            # 1. PROTEÇÃO CONTRA ESQUECIMENTO (Avisa em vez de ignorar)
+            if not txt_obs.value or not txt_placa.value:
+                page.snack_bar = ft.SnackBar(ft.Text("Erro: Preencha a PLACA e a OBSERVAÇÃO!", color="white"), bgcolor="red")
+                page.snack_bar.open = True
+                page.update()
+                return
             
-            dados = {
-                "usuario_id": usuario_atual['id'], 
-                "placa": txt_placa.value, 
-                "modelo": txt_modelo.value, 
-                "cliente": txt_cliente.value, 
-                "observacoes": txt_obs.value,
-                "is_extra": chk_extra.value 
-            }
-            if id_em_edicao['id']:
-                supabase.table("servicos").update(dados).eq("id", id_em_edicao['id']).execute()
-            else:
-                supabase.table("servicos").insert(dados).execute()
+            # Feedback Visual Seguro
+            btn_salvar_os.text = "SALVANDO..."
+            btn_salvar_os.disabled = True
+            page.update()
             
-            resetar_form(); page.snack_bar = ft.SnackBar(ft.Text("Registro Salvo!")); page.snack_bar.open = True; page.update()
+            try:
+                # 2. PROTEÇÃO CONTRA QUEDA DE CONEXÃO
+                dados = {
+                    "usuario_id": usuario_atual['id'], 
+                    "placa": txt_placa.value, 
+                    "modelo": txt_modelo.value, 
+                    "cliente": txt_cliente.value, 
+                    "observacoes": txt_obs.value,
+                    "is_extra": chk_extra.value 
+                }
+                if id_em_edicao['id']:
+                    supabase.table("servicos").update(dados).eq("id", id_em_edicao['id']).execute()
+                else:
+                    supabase.table("servicos").insert(dados).execute()
+                
+                # Sucesso
+                page.snack_bar = ft.SnackBar(ft.Text("Registro Salvo com Sucesso!", color="white"), bgcolor="green")
+                page.snack_bar.open = True
+                resetar_form() # Isso reabilita o botão
+            except Exception as ex:
+                # Erro: Mantém os dados na tela para o usuário tentar de novo
+                print(f"Erro salvar: {ex}")
+                page.snack_bar = ft.SnackBar(ft.Text("Erro de Conexão. Tente novamente.", color="white"), bgcolor="red")
+                page.snack_bar.open = True
+                btn_salvar_os.text = "TENTAR SALVAR NOVAMENTE"
+                btn_salvar_os.disabled = False
+                page.update()
 
         btn_salvar_os.on_click = salvar_os
         btn_cancelar_edicao.on_click = lambda e: resetar_form()
@@ -313,7 +355,6 @@ def main(page: ft.Page):
         txt_feedback_pdf = ft.Text("", color="blue")
         linha_botoes_pdf = ft.Row(visible=False, alignment=ft.MainAxisAlignment.CENTER, wrap=True) 
 
-        # Função Helper de Consulta (Usada na Busca e na Geração)
         def realizar_consulta_banco():
             q = supabase.table("servicos").select("*").gte("data_hora", f"{txt_dt_ini.value}T00:00:00").lte("data_hora", f"{txt_dt_fim.value}T23:59:59").order("id", desc=True)
             if dd_filtro_func.visible and dd_filtro_func.value != "todos" and dd_filtro_func.value:
@@ -329,28 +370,34 @@ def main(page: ft.Page):
             txt_feedback_pdf.value = ""
             page.update()
 
-            dados_frescos = realizar_consulta_banco()
-            
-            if dados_frescos:
-                dados_atuais.extend(dados_frescos)
-                btn_gerar.visible = True
-                for item in dados_frescos:
-                    texto_extra = " [EXTRA]" if item.get('is_extra') else ""
-                    card = ft.Container(
-                        padding=10, border=ft.Border.all(1, "grey"), border_radius=8,
-                        content=ft.Column([
-                            ft.Row([ft.Text(f"PLACA: {item['placa']}{texto_extra}", weight="bold"), ft.Text(f"{item['data_hora'][8:10]}/{item['data_hora'][5:7]}", color="grey")], alignment="spaceBetween"),
-                            ft.Text(f"Veículo: {item.get('modelo','-')}"),
-                            ft.Text(f"Cliente: {item.get('cliente','-')}", size=12),
-                            ft.Text(f"Feito: {item.get('observacoes','-')}", color="blue"),
-                            ft.Divider(),
-                            ft.Row([
-                                ft.TextButton("[EDITAR]", on_click=lambda e, i=item: preparar_edicao(i)),
-                                ft.TextButton("[EXCLUIR]", on_click=lambda e, idx=item['id']: (supabase.table("servicos").delete().eq("id", idx).execute(), buscar(None)), style=ft.ButtonStyle(color="red"))
-                            ], alignment="end")
-                        ])
-                    )
-                    lista_cards.controls.append(card)
+            try:
+                dados_frescos = realizar_consulta_banco()
+                
+                if dados_frescos:
+                    dados_atuais.extend(dados_frescos)
+                    btn_gerar.visible = True
+                    for item in dados_frescos:
+                        texto_extra = " [EXTRA]" if item.get('is_extra') else ""
+                        card = ft.Container(
+                            padding=10, border=ft.Border.all(1, "grey"), border_radius=8,
+                            content=ft.Column([
+                                ft.Row([ft.Text(f"PLACA: {item['placa']}{texto_extra}", weight="bold"), ft.Text(f"{item['data_hora'][8:10]}/{item['data_hora'][5:7]}", color="grey")], alignment="spaceBetween"),
+                                ft.Text(f"Veículo: {item.get('modelo','-')}"),
+                                ft.Text(f"Cliente: {item.get('cliente','-')}", size=12),
+                                ft.Text(f"Feito: {item.get('observacoes','-')}", color="blue"),
+                                ft.Divider(),
+                                ft.Row([
+                                    ft.TextButton("[EDITAR]", on_click=lambda e, i=item: preparar_edicao(i)),
+                                    ft.TextButton("[EXCLUIR]", on_click=lambda e, idx=item['id']: (supabase.table("servicos").delete().eq("id", idx).execute(), buscar(None)), style=ft.ButtonStyle(color="red"))
+                                ], alignment="end")
+                            ])
+                        )
+                        lista_cards.controls.append(card)
+                else:
+                    lista_cards.controls.append(ft.Text("Nenhum registro encontrado.", color="grey"))
+            except Exception as ex:
+                lista_cards.controls.append(ft.Text("Erro ao buscar dados.", color="red"))
+
             page.update()
 
         def preparar_edicao(item):
@@ -363,30 +410,32 @@ def main(page: ft.Page):
         def acao_gerar(e):
             btn_gerar.text = "PROCESSANDO..."; btn_gerar.disabled = True; page.update()
             
-            # Busca dados frescos do banco para garantir que o Extra apareça
-            dados_para_relatorio = realizar_consulta_banco()
-            
-            nome_pdf = usuario_atual['nome']
-            if dd_filtro_func.visible and dd_filtro_func.value != "todos":
-                for opt in dd_filtro_func.options:
-                    if opt.key == dd_filtro_func.value: nome_pdf = opt.text
-            
-            url_pdf = gerar_pdf_nuvem(dados_para_relatorio, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
-            url_word = gerar_word_nuvem(dados_para_relatorio, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
-            
-            botoes = []
-            if url_pdf:
-                link_zap = f"https://wa.me/?text={urllib.parse.quote(f'Olá, segue o relatório: {url_pdf}')}"
-                botoes.append(ft.FilledButton("ENVIAR WHATSAPP", url=link_zap, style=ft.ButtonStyle(bgcolor="green"), width=150))
-                botoes.append(ft.FilledButton("ABRIR PDF", url=url_pdf, width=150))
-            if url_word:
-                botoes.append(ft.FilledButton("BAIXAR RELATÓRIO WORD", url=url_word, width=300, style=ft.ButtonStyle(bgcolor="orange")))
+            try:
+                dados_para_relatorio = realizar_consulta_banco()
+                
+                nome_pdf = usuario_atual['nome']
+                if dd_filtro_func.visible and dd_filtro_func.value != "todos":
+                    for opt in dd_filtro_func.options:
+                        if opt.key == dd_filtro_func.value: nome_pdf = opt.text
+                
+                url_pdf = gerar_pdf_nuvem(dados_para_relatorio, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
+                url_word = gerar_word_nuvem(dados_para_relatorio, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
+                
+                botoes = []
+                if url_pdf:
+                    link_zap = f"https://wa.me/?text={urllib.parse.quote(f'Olá, segue o relatório: {url_pdf}')}"
+                    botoes.append(ft.FilledButton("ENVIAR WHATSAPP", url=link_zap, style=ft.ButtonStyle(bgcolor="green"), width=150))
+                    botoes.append(ft.FilledButton("ABRIR PDF", url=url_pdf, width=150))
+                if url_word:
+                    botoes.append(ft.FilledButton("BAIXAR RELATÓRIO WORD", url=url_word, width=300, style=ft.ButtonStyle(bgcolor="orange")))
 
-            if botoes:
-                linha_botoes_pdf.controls = botoes
-                linha_botoes_pdf.visible = True
-                txt_feedback_pdf.value = "Relatórios prontos! Escolha uma opção:"
-                btn_gerar.visible = False 
+                if botoes:
+                    linha_botoes_pdf.controls = botoes
+                    linha_botoes_pdf.visible = True
+                    txt_feedback_pdf.value = "Relatórios prontos! Escolha uma opção:"
+                    btn_gerar.visible = False 
+            except:
+                txt_feedback_pdf.value = "Erro ao gerar arquivos."
                 
             btn_gerar.text = "GERAR RELATÓRIO"
             btn_gerar.disabled = False
