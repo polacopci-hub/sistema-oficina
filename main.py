@@ -8,7 +8,7 @@ from datetime import timedelta
 import os
 import re
 import urllib.parse 
-import time # <--- IMPORTANTE: Adicionado para dar a "respirada" na tela
+import time
 
 # --- CONFIGURAÇÃO DO BANCO ---
 SUPABASE_URL = "https://mwqwceayaouowgehuukf.supabase.co"
@@ -181,12 +181,12 @@ def main(page: ft.Page):
         btn_salvar_cad = ft.FilledButton("SALVAR CADASTRO", width=300, height=50)
 
         def salvar_usuario(e):
-            # FEEDBACK
+            # FEEDBACK COM PAUSA
             btn_salvar_cad.text = "AGUARDE..."
-            btn_salvar_cad.bgcolor = ft.colors.GREY
+            btn_salvar_cad.bgcolor = ft.colors.GREY # Agora o Render vai entender isso!
             btn_salvar_cad.disabled = True
             page.update()
-            time.sleep(0.1) # A "Respirada"
+            time.sleep(0.1)
 
             if not txt_novo_nome.value or not txt_novo_pin.value:
                 txt_msg_erro.value = "Erro: Preencha os campos!"
@@ -239,7 +239,7 @@ def main(page: ft.Page):
             btn_entrar.disabled = True
             txt_aviso_login.value = ""
             page.update()
-            time.sleep(0.1) # A "Respirada"
+            time.sleep(0.1)
 
             nome_limpo = txt_login_nome.value.strip() 
             pin_limpo = txt_login_pin.value.strip()   
@@ -324,7 +324,7 @@ def main(page: ft.Page):
             btn_salvar_os.bgcolor = ft.colors.GREY
             btn_salvar_os.disabled = True
             page.update()
-            time.sleep(0.1) # A "Respirada"
+            time.sleep(0.1) 
             
             try:
                 dados = {
