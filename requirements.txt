@@ -1,3 +1,4 @@
 flet
 supabase
 fpdf2
+python-docx

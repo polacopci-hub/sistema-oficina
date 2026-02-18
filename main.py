@@ -1,6 +1,8 @@
 import flet as ft
 from supabase import create_client, Client
-from fpdf import FPDF # <--- AQUI ESTAVA O ERRO, VOLTAMOS PARA O CORRETO
+from fpdf import FPDF
+from docx import Document # Biblioteca do Word
+from docx.shared import Pt
 import datetime
 from datetime import timedelta
 import os
@@ -32,14 +34,13 @@ def main(page: ft.Page):
         s = texto.replace(" ", "_")
         return re.sub(r'[^a-zA-Z0-9_\-]', '', s)
 
-    # --- GERADOR DE PDF ---
+    # --- GERADOR DE PDF (Mantido igual) ---
     def gerar_pdf_nuvem(lista_dados, periodo, nome_usuario):
         try:
-            pdf = FPDF() # Cria o objeto PDF normalmente
+            pdf = FPDF() 
             pdf.add_page()
             pdf.set_font("helvetica", "B", 16)
             
-            # Como o requirements tem fpdf2, esses comandos modernos (new_x) vão funcionar!
             pdf.cell(0, 10, "RELATORIO DE SERVICOS", align="C", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("helvetica", "", 10)
             pdf.cell(0, 10, f"Periodo: {periodo}", align="C", new_x="LMARGIN", new_y="NEXT")
@@ -84,6 +85,91 @@ def main(page: ft.Page):
             print(f"Erro PDF: {ex}")
             return None
 
+    # --- NOVO GERADOR DE WORD (MODELO COMISSÃO) ---
+    def gerar_word_nuvem(lista_dados, periodo, nome_usuario):
+        try:
+            doc = Document()
+            
+            # Título
+            titulo = doc.add_paragraph()
+            run = titulo.add_run(f"{periodo}\nCOMISSÃO do SERVIÇO REALIZADO – {nome_usuario}")
+            run.bold = True
+            run.font.size = Pt(14)
+            
+            # Separa Normais de Extras
+            normais = [i for i in lista_dados if not i.get('is_extra', False)]
+            extras = [i for i in lista_dados if i.get('is_extra', False)]
+
+            # --- TABELA 1: SERVIÇO NORMAL ---
+            tabela = doc.add_table(rows=1, cols=5)
+            tabela.style = 'Table Grid'
+            hdr_cells = tabela.rows[0].cells
+            hdr_cells[0].text = 'Veículo'
+            hdr_cells[1].text = 'Placa'
+            hdr_cells[2].text = 'Serviço'
+            hdr_cells[3].text = 'Proprietário'
+            hdr_cells[4].text = 'R$'
+
+            for item in normais:
+                row_cells = tabela.add_row().cells
+                row_cells[0].text = str(item.get('modelo', ''))
+                row_cells[1].text = str(item.get('placa', ''))
+                row_cells[2].text = str(item.get('observacoes', ''))
+                row_cells[3].text = str(item.get('cliente', ''))
+                row_cells[4].text = '' # Coluna R$ vazia para preencher a mão
+            
+            # Linha TOTAL no final da tabela normal
+            row_total = tabela.add_row().cells
+            row_total[3].text = "TOTAL"
+            row_total[4].text = ""
+
+            doc.add_paragraph("\n") # Espaço
+
+            # --- TABELA 2: EXTRA (Se houver) ---
+            if extras or True: # Forcei True para sempre aparecer a tabela Extra, mesmo vazia (igual ao modelo)
+                titulo_extra = doc.add_paragraph()
+                run_ex = titulo_extra.add_run("Extra")
+                run_ex.bold = True
+                
+                tabela_ex = doc.add_table(rows=1, cols=5)
+                tabela_ex.style = 'Table Grid'
+                hdr_ex = tabela_ex.rows[0].cells
+                hdr_ex[0].text = 'Veículo'
+                hdr_ex[1].text = 'Placa'
+                hdr_ex[2].text = 'Serviço'
+                hdr_ex[3].text = 'Proprietário'
+                hdr_ex[4].text = 'R$'
+
+                for item in extras:
+                    row_cells = tabela_ex.add_row().cells
+                    row_cells[0].text = str(item.get('modelo', ''))
+                    row_cells[1].text = str(item.get('placa', ''))
+                    row_cells[2].text = str(item.get('observacoes', ''))
+                    row_cells[3].text = str(item.get('cliente', ''))
+                    row_cells[4].text = ''
+                
+                # Linha TOTAL no final da tabela extra
+                row_total_ex = tabela_ex.add_row().cells
+                row_total_ex[3].text = "TOTAL"
+                row_total_ex[4].text = ""
+
+            # Salvar e Upload
+            data_hoje = datetime.datetime.now().strftime("%Y-%m-%d")
+            nome_arq = f"Comissao_{limpar_nome_arquivo(nome_usuario)}_{data_hoje}.docx"
+            doc.save(nome_arq)
+
+            with open(nome_arq, "rb") as f:
+                supabase.storage.from_("relatorios").upload(
+                    path=nome_arq, file=f, file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "x-upsert": "true"}
+                )
+            url = supabase.storage.from_("relatorios").get_public_url(nome_arq)
+            os.remove(nome_arq)
+            return url
+
+        except Exception as ex:
+            print(f"Erro Word: {ex}")
+            return None
+
     # --- TELA DE CADASTRO ---
     def tela_cadastro():
         page.clean()
@@ -97,7 +183,15 @@ def main(page: ft.Page):
             if not txt_novo_nome.value or not txt_novo_pin.value:
                 txt_msg_erro.value = "Erro: Preencha os campos!"; page.update(); return
             try:
-                supabase.table("usuarios").insert({"nome": txt_novo_nome.value, "pin": txt_novo_pin.value, "setor": txt_novo_setor.value, "ativo": True}).execute()
+                nome_limpo_cad = txt_novo_nome.value.strip()
+                pin_limpo_cad = txt_novo_pin.value.strip()
+                
+                supabase.table("usuarios").insert({
+                    "nome": nome_limpo_cad, 
+                    "pin": pin_limpo_cad, 
+                    "setor": txt_novo_setor.value, 
+                    "ativo": True
+                }).execute()
                 tela_login()
             except: txt_msg_erro.value = "Erro ao cadastrar"; page.update()
 
@@ -124,17 +218,26 @@ def main(page: ft.Page):
         def logar(e):
             txt_aviso_login.value = "Verificando..."; page.update()
             
-            # --- CORREÇÃO DO ESPAÇO FANTASMA (MANTIDA) ---
             nome_limpo = txt_login_nome.value.strip() 
             pin_limpo = txt_login_pin.value.strip()   
             
-            res = supabase.table("usuarios").select("*").ilike("nome", nome_limpo).execute()
+            if not nome_limpo or not pin_limpo:
+                txt_aviso_login.value = "Preencha os campos!"; page.update(); return
+
+            res = supabase.table("usuarios").select("*").ilike("nome", f"{nome_limpo}%").execute()
             
-            if res.data and res.data[0]['pin'] == pin_limpo:
-                usuario_atual.update(res.data[0])
+            usuario_encontrado = None
+            if res.data:
+                for u in res.data:
+                    if u['pin'] == pin_limpo:
+                        usuario_encontrado = u
+                        break
+            
+            if usuario_encontrado:
+                usuario_atual.update(usuario_encontrado)
                 sistema_principal()
             else:
-                txt_aviso_login.value = "Senha Incorreta!"; page.update()
+                txt_aviso_login.value = "Senha ou Usuário Incorretos!"; page.update()
 
         btn_entrar.on_click = logar
         page.add(ft.Column([
@@ -160,26 +263,45 @@ def main(page: ft.Page):
         txt_modelo = ft.TextField(label="Modelo")
         txt_cliente = ft.TextField(label="Cliente")
         txt_obs = ft.TextField(label="O que foi feito? (Observações)", multiline=True, min_lines=3, max_lines=5)
+        
+        # --- NOVO CHECKBOX: EXTRA ---
+        chk_extra = ft.Checkbox(label="Serviço Extra / Pós-Horário", value=False)
+        
         btn_salvar_os = ft.FilledButton("SALVAR REGISTRO", width=300, height=50)
         btn_cancelar_edicao = ft.TextButton("Cancelar Edição", visible=False)
 
         def resetar_form():
             id_em_edicao['id'] = None; lbl_titulo_os.value = "NOVA ORDEM DE SERVICO"; lbl_titulo_os.color = "black"
             btn_salvar_os.text = "SALVAR REGISTRO"; btn_cancelar_edicao.visible = False
-            txt_placa.value = ""; txt_modelo.value = ""; txt_cliente.value = ""; txt_obs.value = ""; page.update()
+            txt_placa.value = ""; txt_modelo.value = ""; txt_cliente.value = ""; txt_obs.value = ""
+            chk_extra.value = False # Reseta o checkbox
+            page.update()
 
         def salvar_os(e):
             if not txt_obs.value or not txt_placa.value: return
-            dados = {"usuario_id": usuario_atual['id'], "placa": txt_placa.value, "modelo": txt_modelo.value, "cliente": txt_cliente.value, "observacoes": txt_obs.value}
+            
+            # Inclui o campo is_extra no salvamento
+            dados = {
+                "usuario_id": usuario_atual['id'], 
+                "placa": txt_placa.value, 
+                "modelo": txt_modelo.value, 
+                "cliente": txt_cliente.value, 
+                "observacoes": txt_obs.value,
+                "is_extra": chk_extra.value 
+            }
+            
             if id_em_edicao['id']:
                 supabase.table("servicos").update(dados).eq("id", id_em_edicao['id']).execute()
             else:
                 supabase.table("servicos").insert(dados).execute()
+            
             resetar_form(); page.snack_bar = ft.SnackBar(ft.Text("Registro Salvo!")); page.snack_bar.open = True; page.update()
 
         btn_salvar_os.on_click = salvar_os
         btn_cancelar_edicao.on_click = lambda e: resetar_form()
-        container_nova_os = ft.Column([lbl_titulo_os, txt_placa, txt_modelo, txt_cliente, ft.Divider(), txt_obs, btn_salvar_os, btn_cancelar_edicao])
+        
+        # Adicionei o Checkbox na tela
+        container_nova_os = ft.Column([lbl_titulo_os, txt_placa, txt_modelo, txt_cliente, ft.Divider(), txt_obs, chk_extra, btn_salvar_os, btn_cancelar_edicao])
 
         # ABA 2: HISTORICO
         txt_dt_ini = ft.TextField(label="Início", value=str(datetime.date.today()), width=140)
@@ -187,10 +309,9 @@ def main(page: ft.Page):
         dd_filtro_func = ft.Dropdown(label="Filtrar por Técnico", width=300, visible=False)
         lista_cards = ft.Column()
         
-        # Botões de Ação
-        btn_gerar = ft.FilledButton("GERAR RELATÓRIO PDF", visible=False, width=300)
+        btn_gerar = ft.FilledButton("GERAR RELATÓRIO", visible=False, width=300)
         txt_feedback_pdf = ft.Text("", color="blue")
-        linha_botoes_pdf = ft.Row(visible=False, alignment=ft.MainAxisAlignment.CENTER)
+        linha_botoes_pdf = ft.Row(visible=False, alignment=ft.MainAxisAlignment.CENTER, wrap=True) # wrap=True para não quebrar no celular
 
         def buscar(e):
             lista_cards.controls.clear(); dados_atuais.clear(); 
@@ -209,10 +330,13 @@ def main(page: ft.Page):
             if res.data:
                 dados_atuais.extend(res.data); btn_gerar.visible = True
                 for item in res.data:
+                    # Verifica se é extra para mostrar no card
+                    texto_extra = " [EXTRA]" if item.get('is_extra') else ""
+                    
                     card = ft.Container(
                         padding=10, border=ft.Border.all(1, "grey"), border_radius=8,
                         content=ft.Column([
-                            ft.Row([ft.Text(f"PLACA: {item['placa']}", weight="bold"), ft.Text(f"{item['data_hora'][8:10]}/{item['data_hora'][5:7]}", color="grey")], alignment="spaceBetween"),
+                            ft.Row([ft.Text(f"PLACA: {item['placa']}{texto_extra}", weight="bold"), ft.Text(f"{item['data_hora'][8:10]}/{item['data_hora'][5:7]}", color="grey")], alignment="spaceBetween"),
                             ft.Text(f"Veículo: {item.get('modelo','-')}"),
                             ft.Text(f"Cliente: {item.get('cliente','-')}", size=12),
                             ft.Text(f"Feito: {item.get('observacoes','-')}", color="blue"),
@@ -229,6 +353,8 @@ def main(page: ft.Page):
         def preparar_edicao(item):
             id_em_edicao['id'] = item['id']; txt_placa.value = item['placa']; txt_modelo.value = item['modelo']
             txt_cliente.value = item['cliente']; txt_obs.value = item['observacoes']
+            chk_extra.value = item.get('is_extra', False) # Carrega se era extra
+            
             lbl_titulo_os.value = f"EDITANDO REGISTRO #{item['id']}"; lbl_titulo_os.color = "orange"
             btn_salvar_os.text = "SALVAR ALTERAÇÕES"; btn_cancelar_edicao.visible = True; ir_para_nova(None)
 
@@ -239,20 +365,29 @@ def main(page: ft.Page):
                 for opt in dd_filtro_func.options:
                     if opt.key == dd_filtro_func.value: nome_pdf = opt.text
             
-            url = gerar_pdf_nuvem(dados_atuais, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
+            # Gera PDF (Whatsapp/Visualização)
+            url_pdf = gerar_pdf_nuvem(dados_atuais, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
             
-            if url:
-                link_zap = f"https://wa.me/?text={urllib.parse.quote(f'Olá, segue o relatório: {url}')}"
-                btn_zap = ft.FilledButton("ENVIAR WHATSAPP", url=link_zap, style=ft.ButtonStyle(bgcolor="green"), expand=True)
-                btn_abrir = ft.FilledButton("ABRIR PDF", url=url, expand=True) 
+            # Gera WORD (Relatório Comissão)
+            url_word = gerar_word_nuvem(dados_atuais, f"{txt_dt_ini.value} a {txt_dt_fim.value}", nome_pdf)
+            
+            botoes = []
+            if url_pdf:
+                link_zap = f"https://wa.me/?text={urllib.parse.quote(f'Olá, segue o relatório: {url_pdf}')}"
+                botoes.append(ft.FilledButton("ENVIAR WHATSAPP", url=link_zap, style=ft.ButtonStyle(bgcolor="green"), width=150))
+                botoes.append(ft.FilledButton("ABRIR PDF", url=url_pdf, width=150))
+            
+            if url_word:
+                 # Novo Botão Word
+                botoes.append(ft.FilledButton("BAIXAR RELATÓRIO WORD", url=url_word, width=300, style=ft.ButtonStyle(bgcolor="orange")))
 
-                linha_botoes_pdf.controls = [btn_zap, btn_abrir]
+            if botoes:
+                linha_botoes_pdf.controls = botoes
                 linha_botoes_pdf.visible = True
-                
-                txt_feedback_pdf.value = "Relatório pronto! Escolha uma opção:"
+                txt_feedback_pdf.value = "Relatórios prontos! Escolha uma opção:"
                 btn_gerar.visible = False 
                 
-            btn_gerar.text = "GERAR RELATÓRIO PDF"
+            btn_gerar.text = "GERAR RELATÓRIO"
             btn_gerar.disabled = False
             page.update()
 
