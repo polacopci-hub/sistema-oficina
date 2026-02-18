@@ -1,6 +1,6 @@
 import flet as ft
 from supabase import create_client, Client
-from fpdf import FPDF2 # O requirements.txt garante que o Render use a versão nova
+from fpdf import FPDF # <--- AQUI ESTAVA O ERRO, VOLTAMOS PARA O CORRETO
 import datetime
 from datetime import timedelta
 import os
@@ -35,10 +35,11 @@ def main(page: ft.Page):
     # --- GERADOR DE PDF ---
     def gerar_pdf_nuvem(lista_dados, periodo, nome_usuario):
         try:
-            pdf = FPDF()
+            pdf = FPDF() # Cria o objeto PDF normalmente
             pdf.add_page()
             pdf.set_font("helvetica", "B", 16)
             
+            # Como o requirements tem fpdf2, esses comandos modernos (new_x) vão funcionar!
             pdf.cell(0, 10, "RELATORIO DE SERVICOS", align="C", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("helvetica", "", 10)
             pdf.cell(0, 10, f"Periodo: {periodo}", align="C", new_x="LMARGIN", new_y="NEXT")
@@ -123,14 +124,12 @@ def main(page: ft.Page):
         def logar(e):
             txt_aviso_login.value = "Verificando..."; page.update()
             
-            # --- CORREÇÃO APLICADA AQUI: REMOVENDO ESPAÇOS ---
-            nome_limpo = txt_login_nome.value.strip() # Remove espaços antes e depois
-            pin_limpo = txt_login_pin.value.strip()   # Remove espaços antes e depois
+            # --- CORREÇÃO DO ESPAÇO FANTASMA (MANTIDA) ---
+            nome_limpo = txt_login_nome.value.strip() 
+            pin_limpo = txt_login_pin.value.strip()   
             
-            # Usa o nome limpo para buscar no banco
             res = supabase.table("usuarios").select("*").ilike("nome", nome_limpo).execute()
             
-            # Compara com o pin limpo
             if res.data and res.data[0]['pin'] == pin_limpo:
                 usuario_atual.update(res.data[0])
                 sistema_principal()
@@ -191,8 +190,6 @@ def main(page: ft.Page):
         # Botões de Ação
         btn_gerar = ft.FilledButton("GERAR RELATÓRIO PDF", visible=False, width=300)
         txt_feedback_pdf = ft.Text("", color="blue")
-        
-        # Container que vai segurar os dois botões (Invisível no começo)
         linha_botoes_pdf = ft.Row(visible=False, alignment=ft.MainAxisAlignment.CENTER)
 
         def buscar(e):
